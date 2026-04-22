@@ -1,0 +1,64 @@
+name: Refresh amoCRM Dashboard
+
+on:
+  # Har 15 daqiqada avtomatik yangilanadi.
+  # Eslatma: GitHub cron aniq vaqtda ishlamaydi — peak soatlarda 1-5 daqiqa
+  # kechikish bo'lishi mumkin. Bu normal holat.
+  schedule:
+    - cron: "*/15 * * * *"
+
+  # Push bo'lganda ham yangilaydi (test uchun)
+  push:
+    branches: [main]
+
+  # Qo'lda ishga tushirish imkoniyati (Actions → Run workflow)
+  workflow_dispatch:
+
+# Pages deploy uchun kerakli huquqlar
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+# Bir vaqtda faqat bitta deploy; eskisi tugamasa ham keyingisini kutadi
+concurrency:
+  group: pages
+  cancel-in-progress: false
+
+jobs:
+  build-and-deploy:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Generate dashboard.html
+        env:
+          AMOCRM_TOKEN: ${{ secrets.AMOCRM_TOKEN }}
+        run: |
+          python3 amocrm_dashboard.py
+          mkdir -p _site
+          mv dashboard.html _site/index.html
+          # noindex uchun robots.txt ham qo'shamiz
+          printf "User-agent: *\nDisallow: /\n" > _site/robots.txt
+
+      - name: Setup Pages
+        uses: actions/configure-pages@v5
+
+      - name: Upload Pages artifact
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: _site
+
+      - name: Deploy to GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v4
