@@ -363,12 +363,25 @@ def build_html(stats, data):
 
     kechki = next((p for p in data["pipelines"] if p["id"] == KECHKI_PIPELINE_ID), None)
     funnel_statuses = []
+    qayta_aloqa_id = None
+    oylab_koradi_id = None
     if kechki:
         fs = sorted(
             kechki.get("_embedded", {}).get("statuses", []),
             key=lambda s: s.get("sort", 0),
         )
         funnel_statuses = [{"id": s["id"], "name": s["name"]} for s in fs]
+        # "Qayta aloqa" va "O'ylab ko'radi" statuslarini nom bo'yicha topamiz
+        # (nomi o'zgarsa ham kichik o'zgarish bilan ishlayveradi)
+        for s in fs:
+            nm = (s.get("name") or "").strip().lower()
+            # "qayta aloqa", "qaytaaloqa", "qayta_aloqa" — barchasini qamraydi
+            if "qayta" in nm and "aloqa" in nm:
+                qayta_aloqa_id = s["id"]
+            # "o'ylab ko'radi", "oylab koradi", "o'ylaydi" — turli yozuvlar
+            if ("o'ylab" in nm or "oylab" in nm or "o`ylab" in nm) and \
+               ("ko'rad" in nm or "korad" in nm or "ko`rad" in nm):
+                oylab_koradi_id = s["id"]
 
     site_pipe = next((p for p in data["pipelines"] if p["id"] == SITE_PIPELINE_ID), None)
     site_funnel_statuses = []
@@ -395,6 +408,8 @@ def build_html(stats, data):
         "sold_ids": [142, 84218386],
         "lost_ids": [143, 83259162],
         "apr26_id": APRIL_26_STATUS_ID,
+        "qayta_aloqa_id": qayta_aloqa_id,
+        "oylab_koradi_id": oylab_koradi_id,
         "days_back": DAYS_BACK_CALLS,
     }
     data_json = json.dumps(raw_payload, ensure_ascii=False)
@@ -670,9 +685,15 @@ def build_html(stats, data):
       <div class="value" id="kpi-apr26">–</div>
       <div class="sub" id="kpi-conv"></div>
     </div>
+    <div class="kpi indigo">
+      <div class="label">🔁 Qayta aloqa</div>
+      <div class="value" id="kpi-qayta-aloqa">–</div>
+      <div class="sub" id="kpi-qayta-aloqa-sub"></div>
+    </div>
     <div class="kpi teal">
-      <div class="label">Jarayonda</div>
-      <div class="value" id="kpi-in-progress">–</div>
+      <div class="label">💭 O'ylab ko'radi</div>
+      <div class="value" id="kpi-oylab-koradi">–</div>
+      <div class="sub" id="kpi-oylab-koradi-sub"></div>
     </div>
     <div class="kpi orange">
       <div class="label">Sotilgan</div>
@@ -915,10 +936,13 @@ function computeStats(leads, calls) {
 
   const total_leads = leads.length;
   let apr26 = 0, sold = 0, lost = 0;
+  let qayta_aloqa = 0, oylab_koradi = 0;
   const statusCounts = {};
   for (const l of leads) {
     statusCounts[l.s] = (statusCounts[l.s] || 0) + 1;
     if (l.s === RAW.apr26_id) apr26++;
+    if (RAW.qayta_aloqa_id && l.s === RAW.qayta_aloqa_id) qayta_aloqa++;
+    if (RAW.oylab_koradi_id && l.s === RAW.oylab_koradi_id) oylab_koradi++;
     if (RAW.sold_ids.includes(l.s)) sold++;
     if (RAW.lost_ids.includes(l.s)) lost++;
     const nm = uname(l.u);
@@ -929,6 +953,8 @@ function computeStats(leads, calls) {
   }
   const in_progress = total_leads - sold - lost;
   const conv = total_leads ? apr26 / total_leads : 0;
+  const qayta_aloqa_conv = total_leads ? qayta_aloqa / total_leads : 0;
+  const oylab_koradi_conv = total_leads ? oylab_koradi / total_leads : 0;
 
   const mgr_rows = Object.entries(mgr).map(([name, s]) => {
     const score = Math.round(s.calls * 0.3 + s.answered * 0.5 + s.leads * 2 + s.apr26 * 5 + s.sold * 20);
@@ -1003,6 +1029,8 @@ function computeStats(leads, calls) {
            in_answered, out_answered,
            total_duration, avg_duration,
            total_leads, apr26, sold, lost, in_progress, conv,
+           qayta_aloqa, qayta_aloqa_conv,
+           oylab_koradi, oylab_koradi_conv,
            mgr_rows, funnel, daily_leads, daily_calls, daily_duration,
            hourly };
 }
@@ -1035,7 +1063,10 @@ function render(fromTs, toTs, label) {
   $('kpi-total-leads').textContent = s.total_leads;
   $('kpi-apr26').textContent = s.apr26;
   $('kpi-conv').textContent = 'Konversiya: ' + (s.conv * 100).toFixed(1) + '%';
-  $('kpi-in-progress').textContent = s.in_progress;
+  $('kpi-qayta-aloqa').textContent = s.qayta_aloqa;
+  $('kpi-qayta-aloqa-sub').textContent = 'Konversiya: ' + (s.qayta_aloqa_conv * 100).toFixed(1) + '%';
+  $('kpi-oylab-koradi').textContent = s.oylab_koradi;
+  $('kpi-oylab-koradi-sub').textContent = 'Konversiya: ' + (s.oylab_koradi_conv * 100).toFixed(1) + '%';
   $('kpi-sold').textContent = s.sold;
   $('kpi-lost').textContent = s.lost;
 
