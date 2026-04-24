@@ -44,6 +44,9 @@ jobs:
       - name: Generate dashboard.html
         env:
           AMOCRM_TOKEN: ${{ secrets.AMOCRM_TOKEN }}
+          MOIZVONKI_USER_NAME: ${{ secrets.MOIZVONKI_USER_NAME }}
+          MOIZVONKI_API_KEY: ${{ secrets.MOIZVONKI_API_KEY }}
+          MOIZVONKI_DOMAIN: ${{ secrets.MOIZVONKI_DOMAIN }}
         run: |
           python3 amocrm_dashboard.py
           mkdir -p _site

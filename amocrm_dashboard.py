@@ -39,6 +39,14 @@ DAYS_BACK_CALLS = 30
 KECHKI_PIPELINE_ID = 10554058
 APRIL_26_STATUS_ID = 84110942
 
+# ----- Moi Zvonki (ixtiyoriy) -----
+# Agar MOIZVONKI_API_KEY env var o'rnatilgan bo'lsa, qo'ng'iroqlar amoCRM call
+# notes o'rniga to'g'ridan-to'g'ri PBX'dan olinadi (eng aniq ma'lumot).
+MOIZVONKI_DOMAIN = os.environ.get("MOIZVONKI_DOMAIN", "salohiyatschool.moizvonki.ru").strip()
+MOIZVONKI_USER_NAME = os.environ.get("MOIZVONKI_USER_NAME", "").strip()
+MOIZVONKI_API_KEY = os.environ.get("MOIZVONKI_API_KEY", "").strip()
+USE_MOIZVONKI = bool(MOIZVONKI_API_KEY and MOIZVONKI_USER_NAME)
+
 # Site voronka (Toshkent leadlari)
 SITE_PIPELINE_ID = 10705250
 SITE_TOSHKENT_STATUS_ID = 84347286          # 'Toshkent' statusi
@@ -112,6 +120,12 @@ def fetch_all():
     print("1/4  Users yuklanmoqda...")
     users = paginate("/users")
     user_map = {u["id"]: u.get("name", f"User {u['id']}") for u in users}
+    # Email → user_id mapping (Moi Zvonki bilan moslash uchun)
+    email_to_user_id = {}
+    for u in users:
+        em = (u.get("email") or "").strip().lower()
+        if em:
+            email_to_user_id[em] = u["id"]
     print(f"     ✓ {len(users)} user")
 
     print("2/4  Pipelines yuklanmoqda...")
@@ -145,38 +159,68 @@ def fetch_all():
     site_leads = [l for l in site_leads_all if l.get("status_id") not in SITE_EXCLUDED_STATUS_IDS]
     print(f"     ✓ jami Site: {len(site_leads_all)},  Toshkent (filtrlangan): {len(site_leads)}")
 
-    print(f"5/5  Qo'ng'iroqlar ({DAYS_BACK_CALLS} kun)...")
     end_ts = int(time.time())
     start_ts = end_ts - DAYS_BACK_CALLS * 86400
 
-    # Qo'ng'iroqlar ikkita joyda bo'lishi mumkin: leads/notes VA contacts/notes
-    lead_notes = paginate(
-        "/leads/notes",
-        {
-            "filter[note_type][]": ["call_in", "call_out"],
-            "filter[created_at][from]": start_ts,
-            "filter[created_at][to]": end_ts,
-        },
-        max_items=5000,
-    )
-    contact_notes = paginate(
-        "/contacts/notes",
-        {
-            "filter[note_type][]": ["call_in", "call_out"],
-            "filter[created_at][from]": start_ts,
-            "filter[created_at][to]": end_ts,
-        },
-        max_items=5000,
-    )
-    # Id bo'yicha dublikatlarni olib tashlaymiz
-    seen = set()
-    all_notes = []
-    for n in lead_notes + contact_notes:
-        nid = n.get("id")
-        if nid and nid not in seen:
-            seen.add(nid)
-            all_notes.append(n)
-    print(f"     ✓ leads/notes: {len(lead_notes)}, contacts/notes: {len(contact_notes)}, jami (noyob): {len(all_notes)}")
+    if USE_MOIZVONKI:
+        print(f"5/5  Qo'ng'iroqlar Moi Zvonki'dan ({DAYS_BACK_CALLS} kun)...")
+        try:
+            from moizvonki_api import fetch_calls as mz_fetch, calls_to_dashboard_format
+            mz_calls = mz_fetch(
+                domain=MOIZVONKI_DOMAIN,
+                user_name=MOIZVONKI_USER_NAME,
+                api_key=MOIZVONKI_API_KEY,
+                from_ts=start_ts,
+                to_ts=end_ts,
+            )
+            print(f"     ✓ Moi Zvonki: {len(mz_calls)} qo'ng'iroq")
+            all_notes, user_map = calls_to_dashboard_format(
+                mz_calls, email_to_user_id=email_to_user_id, user_map=user_map
+            )
+            # Yangi user_map — MoiZvonki email'lari ham ichida (agar amoCRM'da yo'q bo'lsa)
+            calls_source = "moizvonki"
+        except Exception as e:
+            print(f"     ⚠ Moi Zvonki xatosi: {e}")
+            print(f"     ➜ AmoCRM call notes'larga qaytyapman (zaxira)")
+            all_notes = []
+            calls_source = "amocrm_fallback"
+            USE_AMOCRM_NOTES = True
+        else:
+            USE_AMOCRM_NOTES = False
+    else:
+        USE_AMOCRM_NOTES = True
+        calls_source = "amocrm"
+
+    if USE_AMOCRM_NOTES:
+        print(f"5/5  Qo'ng'iroqlar amoCRM notes'dan ({DAYS_BACK_CALLS} kun)...")
+        # Qo'ng'iroqlar ikkita joyda bo'lishi mumkin: leads/notes VA contacts/notes
+        lead_notes = paginate(
+            "/leads/notes",
+            {
+                "filter[note_type][]": ["call_in", "call_out"],
+                "filter[created_at][from]": start_ts,
+                "filter[created_at][to]": end_ts,
+            },
+            max_items=5000,
+        )
+        contact_notes = paginate(
+            "/contacts/notes",
+            {
+                "filter[note_type][]": ["call_in", "call_out"],
+                "filter[created_at][from]": start_ts,
+                "filter[created_at][to]": end_ts,
+            },
+            max_items=5000,
+        )
+        # Id bo'yicha dublikatlarni olib tashlaymiz
+        seen = set()
+        all_notes = []
+        for n in lead_notes + contact_notes:
+            nid = n.get("id")
+            if nid and nid not in seen:
+                seen.add(nid)
+                all_notes.append(n)
+        print(f"     ✓ leads/notes: {len(lead_notes)}, contacts/notes: {len(contact_notes)}, jami (noyob): {len(all_notes)}")
 
     return {
         "users": users,
@@ -186,6 +230,7 @@ def fetch_all():
         "leads": leads,
         "site_leads": site_leads,
         "calls": all_notes,
+        "calls_source": calls_source,
         "generated_at": datetime.now(timezone(timedelta(hours=5))).strftime("%d.%m.%Y %H:%M"),
     }
 
@@ -613,7 +658,7 @@ def build_html(stats, data):
 <div class="container">
   <header>
     <h1>📊 amoCRM Dashboard — Salohiyat</h1>
-    <div class="sub">Yangilangan: __GENERATED_AT__ · Ma'lumotlar: oxirgi __DAYS_BACK__ kun</div>
+    <div class="sub">Yangilangan: __GENERATED_AT__ · Ma'lumotlar: oxirgi __DAYS_BACK__ kun · Qo'ng'iroqlar manbai: <b>__CALLS_SOURCE__</b></div>
   </header>
 
   <div class="filter-bar">
@@ -1379,9 +1424,17 @@ applyPreset('30');
 </body>
 </html>"""
 
+    calls_source = data.get("calls_source", "amocrm")
+    source_label = {
+        "moizvonki": "Moi Zvonki (PBX)",
+        "amocrm": "amoCRM call notes",
+        "amocrm_fallback": "amoCRM (zaxira — Moi Zvonki ishlamadi)",
+    }.get(calls_source, calls_source)
+
     html = (html_template
             .replace("__GENERATED_AT__", generated_at)
             .replace("__DAYS_BACK__", str(DAYS_BACK_CALLS))
+            .replace("__CALLS_SOURCE__", source_label)
             .replace("__DATA_JSON__", data_json))
     return html
 
