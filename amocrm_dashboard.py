@@ -65,10 +65,12 @@ USE_MOIZVONKI = bool(MOIZVONKI_API_KEY and MOIZVONKI_USER_NAME and MOIZVONKI_DOM
 #       "jamshid@salohiyat.uz": "Jamshid",
 #   }
 MOIZVONKI_NAME_OVERRIDES = {
-    # Moi Zvonki kabinet → Sozlamalar → Foydalanuvchilar dan olingan
-    "salohiyatschool@gmail.com": "Jamshid",
-    "dilshodxaydarov1987@gmail.com": "Begzod",
-    "tulkinovabduvohid12@gmail.com": "Sotuv manager (Ruslan)",
+    # Foydalanuvchining brauzerda qilgan tahririga muvofiq.
+    # Email amoCRM'dagi user'ga moslanadi va dashboard'da chiqadigan ism
+    # quyidagicha bo'ladi (hamma qurilmada — telefon, kompyuter):
+    "salohiyatschool@gmail.com": "Begzod",
+    "dilshodxaydarov1987@gmail.com": "Umar",
+    "tulkinovabduvohid12@gmail.com": "Ruslan",
 }
 
 # Site voronka (Toshkent leadlari)
