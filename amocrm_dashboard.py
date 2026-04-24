@@ -1910,7 +1910,7 @@ function checkDataFreshness() {
     const warn = document.createElement('div');
     warn.id = 'staleWarning';
     warn.style.cssText = 'background:#fef3c7;border:1px solid #fcd34d;color:#92400e;padding:10px 14px;border-radius:8px;margin-bottom:14px;font-size:13px;text-align:center';
-    warn.innerHTML = '⚠️ Ma\'lumot eskirgan (' + Math.floor(ageMin) + ' daqiqa avval) — <b style="cursor:pointer;text-decoration:underline" onclick="reloadWithCacheBust()">Yangilash</b>';
+    warn.innerHTML = "\u26A0\uFE0F Ma\u2019lumot eskirgan (" + Math.floor(ageMin) + " daqiqa avval) \u2014 <b style=\"cursor:pointer;text-decoration:underline\" onclick=\"reloadWithCacheBust()\">Yangilash</b>";
     const container = document.querySelector('.container');
     const header = document.querySelector('header');
     if (container && header) container.insertBefore(warn, header.nextSibling);
