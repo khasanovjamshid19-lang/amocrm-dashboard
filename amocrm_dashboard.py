@@ -706,6 +706,132 @@ def build_html(stats, data):
     min-width: 4px;
   }
 
+  /* ============ Konversiya (LIVE) ============ */
+  .conv-card {
+    background: white;
+    border-radius: 14px;
+    box-shadow: 0 1px 3px rgba(0,0,0,0.06);
+    overflow: hidden;
+    margin-bottom: 28px;
+  }
+  .conv-summary {
+    background: linear-gradient(135deg, #1e3a8a 0%, #6366f1 100%);
+    color: white;
+    padding: 22px 26px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 16px;
+    flex-wrap: wrap;
+  }
+  .conv-summary .total-block .total-lbl {
+    font-size: 13px;
+    opacity: 0.9;
+    margin-bottom: 4px;
+  }
+  .conv-summary .total-block .total-num {
+    font-size: 38px;
+    font-weight: 800;
+    line-height: 1;
+  }
+  .conv-summary .total-block .total-sub {
+    font-size: 12px;
+    opacity: 0.85;
+    margin-top: 6px;
+  }
+  .conv-summary .note {
+    font-size: 12px;
+    line-height: 1.5;
+    opacity: 0.95;
+    max-width: 360px;
+    text-align: right;
+    background: rgba(255,255,255,0.12);
+    padding: 10px 14px;
+    border-radius: 10px;
+  }
+  .conv-summary .note .live-dot {
+    display: inline-block;
+    width: 8px;
+    height: 8px;
+    background: #4ade80;
+    border-radius: 50%;
+    margin-right: 6px;
+    box-shadow: 0 0 0 0 rgba(74,222,128,0.7);
+    animation: livePulse 2s infinite;
+    vertical-align: middle;
+  }
+  @keyframes livePulse {
+    0% { box-shadow: 0 0 0 0 rgba(74,222,128,0.7); }
+    70% { box-shadow: 0 0 0 8px rgba(74,222,128,0); }
+    100% { box-shadow: 0 0 0 0 rgba(74,222,128,0); }
+  }
+  .funnel-list { padding: 8px 0; }
+  .funnel-row {
+    padding: 12px 22px 14px;
+    border-bottom: 1px solid #f3f4f6;
+    transition: background 0.15s;
+  }
+  .funnel-row:last-child { border-bottom: none; }
+  .funnel-row:hover { background: #f9fafb; }
+  .funnel-row .top {
+    display: flex;
+    justify-content: space-between;
+    align-items: baseline;
+    gap: 12px;
+    margin-bottom: 8px;
+  }
+  .funnel-row .name {
+    font-weight: 600;
+    font-size: 14.5px;
+    color: #1f2937;
+    flex: 1;
+    min-width: 0;
+  }
+  .funnel-row .count {
+    font-weight: 700;
+    font-size: 18px;
+    color: #1f2937;
+    white-space: nowrap;
+  }
+  .funnel-row .pct {
+    font-weight: 600;
+    font-size: 14px;
+    color: #6b7280;
+    min-width: 56px;
+    text-align: right;
+    white-space: nowrap;
+  }
+  .funnel-row .progress {
+    height: 10px;
+    background: #f3f4f6;
+    border-radius: 6px;
+    overflow: hidden;
+  }
+  .funnel-row .progress-fill {
+    height: 100%;
+    border-radius: 6px;
+    transition: width 0.4s ease;
+    background: linear-gradient(90deg, #6366f1, #818cf8);
+  }
+  .funnel-row.bad .count { color: #dc2626; }
+  .funnel-row.bad .progress-fill { background: linear-gradient(90deg, #ef4444, #f87171); }
+  .funnel-row.warn .count { color: #d97706; }
+  .funnel-row.warn .progress-fill { background: linear-gradient(90deg, #f59e0b, #fbbf24); }
+  .funnel-row.info .count { color: #2563eb; }
+  .funnel-row.info .progress-fill { background: linear-gradient(90deg, #3b82f6, #60a5fa); }
+  .funnel-row.good .count { color: #059669; }
+  .funnel-row.good .progress-fill { background: linear-gradient(90deg, #10b981, #34d399); }
+  .funnel-row.success .count { color: #0d9488; }
+  .funnel-row.success .progress-fill { background: linear-gradient(90deg, #14b8a6, #2dd4bf); }
+  .funnel-row.purple .count { color: #7c3aed; }
+  .funnel-row.purple .progress-fill { background: linear-gradient(90deg, #8b5cf6, #a78bfa); }
+  .funnel-empty {
+    padding: 28px 22px;
+    text-align: center;
+    color: #9ca3af;
+    font-size: 14px;
+  }
+
   footer {
     text-align: center;
     color: #9ca3af;
@@ -737,6 +863,19 @@ def build_html(stats, data):
     #nameEditOverlay > div { padding: 16px !important; }
     /* Yangilash tugmasi */
     #hardRefreshBtn { font-size: 12px; padding: 6px 10px; }
+    /* Konversiya kartasi mobil uchun */
+    .conv-summary { padding: 16px 18px; }
+    .conv-summary .total-block .total-num { font-size: 30px; }
+    .conv-summary .note {
+      max-width: 100%;
+      text-align: left;
+      font-size: 11.5px;
+      padding: 8px 12px;
+    }
+    .funnel-row { padding: 10px 16px 12px; }
+    .funnel-row .name { font-size: 13px; }
+    .funnel-row .count { font-size: 16px; }
+    .funnel-row .pct { font-size: 12.5px; min-width: 48px; }
   }
 
   @media (max-width: 480px) {
@@ -999,15 +1138,22 @@ def build_html(stats, data):
     <tbody id="mgr-tbody"></tbody>
   </table>
 
-  <div class="section-title">🔄 Voronka — Kechki guruhlar bosqichlari</div>
-  <table>
-    <thead>
-      <tr>
-        <th>Bosqich</th><th>Leadlar</th><th>%</th><th style="width: 40%">Ulush</th>
-      </tr>
-    </thead>
-    <tbody id="funnel-tbody"></tbody>
-  </table>
+  <div class="section-title">🎯 Konversiya — Kechki guruhlar (LIVE holat)</div>
+  <div class="conv-card">
+    <div class="conv-summary">
+      <div class="total-block">
+        <div class="total-lbl">Tanlangan davrda yaratilgan leadlar</div>
+        <div class="total-num" id="conv-total">0</div>
+        <div class="total-sub" id="conv-period">—</div>
+      </div>
+      <div class="note">
+        <span class="live-dot"></span>
+        Pastdagi taqsimot — har bir leadning <b>HOZIRGI</b> statusi.
+        Sotuv manageri leadni boshqa bosqichga o'tkazsa, bu hisobot ham darhol yangilanadi.
+      </div>
+    </div>
+    <div class="funnel-list" id="funnel-list"></div>
+  </div>
 
   <div class="section-title">🔄 Voronka — Site (Toshkent)</div>
   <table>
@@ -1064,6 +1210,29 @@ function uname(uid) {
   const key = String(uid);
   if (_nameOverrides[key]) return _nameOverrides[key];
   return RAW.users[key] || "Noma'lum";
+}
+
+// Status nomiga qarab rang kategoriyasini aniqlaydi (funnel uchun)
+function funnelCategory(name, id) {
+  const n = (name || '').toString().toLowerCase();
+  // sotilgan / muvaffaqiyatli — yashil-teal
+  if (n.includes('sotilgan') || n.includes('muvaffaq') || n.includes('successful') ||
+      id === 142 || (RAW.sold_ids && RAW.sold_ids.includes(id))) return 'success';
+  // sifatsiz / yo'qotilgan / spam / chiqmadi — qizil
+  if (n.includes('sifatsiz') || n.includes("yo'qot") || n.includes('yoqot') ||
+      n.includes("yo`qot") || n.includes('spam') || n.includes('lost') ||
+      n.includes('bekor') || n.includes('rad etil') ||
+      id === 143 || (RAW.lost_ids && RAW.lost_ids.includes(id))) return 'bad';
+  // 26-aprel keladi / kelad / tayyor — yashil
+  if (id === RAW.apr26_id) return 'good';
+  if (n.includes('kelad') || n.includes('tayyor') || n.includes('shartnoma')) return 'good';
+  // qayta aloqa / kutmoq — sariq
+  if (n.includes('qayta') || n.includes('kut') || id === RAW.qayta_aloqa_id) return 'warn';
+  // o'ylab ko'radi / o'ylaydi — binafsha
+  if (n.includes("o'ylab") || n.includes('oylab') || n.includes("o`ylab") ||
+      id === RAW.oylab_koradi_id) return 'purple';
+  // yangi / qabul qilingan / jarayon — ko'k
+  return 'info';
 }
 
 // ---------- Filter compute ----------
@@ -1148,11 +1317,13 @@ function computeStats(leads, calls) {
              leads: s.leads, apr26: s.apr26, sold: s.sold, score };
   }).sort((a, b) => b.score - a.score);
 
-  // Funnel
+  // Funnel — har bir status uchun LIVE count (hozirgi status bo'yicha)
   const funnel = RAW.funnel.map(f => ({
-    name: f.name, count: statusCounts[f.id] || 0,
+    id: f.id, name: f.name,
+    count: statusCounts[f.id] || 0,
     pct: total_leads ? (statusCounts[f.id] || 0) / total_leads : 0,
-  })).filter(f => f.count > 0);
+  })).filter(f => f.count > 0)
+     .sort((a, b) => b.count - a.count);
 
   // Kunlik dinamika (Tashkent kuni bo'yicha)
   const TZ_MS = 5 * 3600 * 1000;
@@ -1308,14 +1479,22 @@ function render(fromTs, toTs, label) {
       <td class="score">${m.score}</td>
     </tr>`).join('');
 
-  // Funnel table
-  $('funnel-tbody').innerHTML = s.funnel.map(f => `
-    <tr>
-      <td class="name">${f.name}</td>
-      <td>${f.count}</td>
-      <td>${(f.pct*100).toFixed(1)}%</td>
-      <td><div class="bar" style="width:${Math.max(2, f.pct*100)}%"></div></td>
-    </tr>`).join('');
+  // Konversiya (LIVE) — total + funnel rows
+  $('conv-total').textContent = s.total_leads + ' ta';
+  $('conv-period').textContent = label ? ('Davr: ' + label) : '';
+  if (s.funnel.length === 0) {
+    $('funnel-list').innerHTML = '<div class="funnel-empty">Bu davrda yaratilgan leadlar yo\u2018q</div>';
+  } else {
+    $('funnel-list').innerHTML = s.funnel.map(f => `
+      <div class="funnel-row ${funnelCategory(f.name, f.id)}">
+        <div class="top">
+          <div class="name">${f.name}</div>
+          <div class="count">${f.count} ta</div>
+          <div class="pct">${(f.pct*100).toFixed(1)}%</div>
+        </div>
+        <div class="progress"><div class="progress-fill" style="width:${Math.max(2, f.pct*100)}%"></div></div>
+      </div>`).join('');
+  }
 
   // Site funnel table
   $('site-funnel-tbody').innerHTML = ss.site_funnel.map(f => `
@@ -1683,26 +1862,50 @@ if (_hardRefreshBtn) {
 applyPreset('30');
 
 // ---------- Avtomatik yangilanish (kesh-buster bilan) ----------
-// Har 15 daqiqada sahifa o'zini qayta yuklaydi va URL'ga ?v=timestamp qo'shadi —
-// shunda telefon/brauzer eski keshlangan versiyani ishlatmaydi.
-setTimeout(function () {
+// Har 10 daqiqada sahifa o'zini qayta yuklaydi va URL'ga ?v=timestamp qo'shadi —
+// shunda telefon/brauzer/CDN eski keshlangan versiyani ishlatmaydi.
+function reloadWithCacheBust() {
   const url = new URL(window.location.href);
   url.searchParams.set('v', Date.now());
   window.location.replace(url.toString());
-}, 15 * 60 * 1000);
+}
+setTimeout(reloadWithCacheBust, 10 * 60 * 1000);
 
-// Sahifa fokus oldida (telefon ekranini ochganda) ham 5 daqiqadan eski bo'lsa yangilaymiz
+// Telefon ekranini ochganda (har safar) — agar 1+ daqiqa o'tgan bo'lsa, yangilaymiz
 let _pageLoadedAt = Date.now();
 document.addEventListener('visibilitychange', function () {
   if (document.visibilityState === 'visible') {
     const ageMin = (Date.now() - _pageLoadedAt) / 60000;
-    if (ageMin > 5) {
-      const url = new URL(window.location.href);
-      url.searchParams.set('v', Date.now());
-      window.location.replace(url.toString());
+    if (ageMin > 1) {
+      reloadWithCacheBust();
     }
   }
 });
+
+// Ma'lumot eskirib qolganini foydalanuvchiga ko'rsatamiz (15+ daqiqa)
+function checkDataFreshness() {
+  const subEl = document.querySelector('header .sub');
+  if (!subEl) return;
+  const m = subEl.textContent.match(/Yangilangan:\s*(\d{2})\.(\d{2})\.(\d{4})\s+(\d{2}):(\d{2})/);
+  if (!m) return;
+  // UTC+5 (Toshkent) zonasi
+  const dataTime = new Date(Date.UTC(
+    parseInt(m[3]), parseInt(m[2]) - 1, parseInt(m[1]),
+    parseInt(m[4]) - 5, parseInt(m[5])  // -5 to convert to UTC
+  ));
+  const ageMin = (Date.now() - dataTime.getTime()) / 60000;
+  if (ageMin > 25 && !document.getElementById('staleWarning')) {
+    const warn = document.createElement('div');
+    warn.id = 'staleWarning';
+    warn.style.cssText = 'background:#fef3c7;border:1px solid #fcd34d;color:#92400e;padding:10px 14px;border-radius:8px;margin-bottom:14px;font-size:13px;text-align:center';
+    warn.innerHTML = '⚠️ Ma\'lumot eskirgan (' + Math.floor(ageMin) + ' daqiqa avval) — <b style="cursor:pointer;text-decoration:underline" onclick="reloadWithCacheBust()">Yangilash</b>';
+    const container = document.querySelector('.container');
+    const header = document.querySelector('header');
+    if (container && header) container.insertBefore(warn, header.nextSibling);
+  }
+}
+setTimeout(checkDataFreshness, 1000);
+setInterval(checkDataFreshness, 60 * 1000);
 </script>
 </body>
 </html>"""
