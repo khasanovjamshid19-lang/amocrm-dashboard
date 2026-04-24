@@ -177,13 +177,27 @@ def fetch_all():
         print(f"     API key:  {MOIZVONKI_API_KEY[:6]}...{MOIZVONKI_API_KEY[-4:]} (len={len(MOIZVONKI_API_KEY)})")
         try:
             from moizvonki_api import fetch_calls as mz_fetch, calls_to_dashboard_format
+            # Avval supervised=1 (admin ko'rinishi — barcha foydalanuvchilar) bilan
+            print(f"     ➜ supervised=1 (admin ko'rinishi) bilan urinib ko'ramiz...")
             mz_calls = mz_fetch(
                 domain=MOIZVONKI_DOMAIN,
                 user_name=MOIZVONKI_USER_NAME,
                 api_key=MOIZVONKI_API_KEY,
                 from_ts=start_ts,
                 to_ts=end_ts,
+                supervised=1,
             )
+            # Agar 0 bo'lsa — supervised=0 bilan ham sinab ko'ramiz
+            if not mz_calls:
+                print(f"     ➜ supervised=1 → 0 qaytdi. supervised=0 bilan sinaymiz...")
+                mz_calls = mz_fetch(
+                    domain=MOIZVONKI_DOMAIN,
+                    user_name=MOIZVONKI_USER_NAME,
+                    api_key=MOIZVONKI_API_KEY,
+                    from_ts=start_ts,
+                    to_ts=end_ts,
+                    supervised=0,
+                )
             print(f"     ✓ Moi Zvonki: {len(mz_calls)} qo'ng'iroq")
             all_notes, user_map = calls_to_dashboard_format(
                 mz_calls, email_to_user_id=email_to_user_id, user_map=user_map

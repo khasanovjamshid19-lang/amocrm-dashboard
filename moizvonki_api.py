@@ -25,7 +25,7 @@ import urllib.request
 
 
 def fetch_calls(domain, user_name, api_key, from_ts, to_ts,
-                page_size=1000, supervised=0, max_pages=500):
+                page_size=1000, supervised=1, max_pages=500):
     """
     Belgilangan davrdagi (from_ts ... to_ts, unix timestamp) qo'ng'iroqlarni qaytaradi.
 
@@ -98,6 +98,21 @@ def fetch_calls(domain, user_name, api_key, from_ts, to_ts,
 
         results = data.get("results") or []
         all_calls.extend(results)
+
+        # Birinchi sahifada hech narsa yo'q bo'lsa — debug ma'lumot chop etamiz
+        if pages == 1 and not results:
+            keys = list(data.keys())
+            err = data.get("error") or data.get("error_message") or data.get("message")
+            status = data.get("status") or data.get("result")
+            print(f"     [debug] javob kalitlari: {keys}")
+            print(f"     [debug] status={status} error={err}")
+            print(f"     [debug] supervised={supervised} from={from_ts} to={to_ts}")
+            # to'liq javobni ham (qisqartirilgan) chop etamiz
+            try:
+                snippet = json.dumps(data, ensure_ascii=False)[:500]
+                print(f"     [debug] javob (500ch): {snippet}")
+            except Exception:
+                pass
 
         # Paginatsiya: results_remains 0 bo'lsa tugadi
         remains = data.get("results_remains", 0)
