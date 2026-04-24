@@ -1142,14 +1142,14 @@ def build_html(stats, data):
   <div class="conv-card">
     <div class="conv-summary">
       <div class="total-block">
-        <div class="total-lbl">Tanlangan davrda yaratilgan leadlar</div>
+        <div class="total-lbl">Tanlangan davrdagi asosiy 4 statusda</div>
         <div class="total-num" id="conv-total">0</div>
         <div class="total-sub" id="conv-period">—</div>
       </div>
       <div class="note">
         <span class="live-dot"></span>
-        Pastdagi taqsimot — har bir leadning <b>HOZIRGI</b> statusi.
-        Sotuv manageri leadni boshqa bosqichga o'tkazsa, bu hisobot ham darhol yangilanadi.
+        Faqat <b>Sifatsiz · Qayta aloqa · O'ylab ko'radi · 26-aprel keladi</b>.
+        Har bir leadning <b>HOZIRGI</b> statusi — manager bosqichni o'zgartirsa, darhol yangilanadi.
       </div>
     </div>
     <div class="funnel-list" id="funnel-list"></div>
@@ -1317,13 +1317,25 @@ function computeStats(leads, calls) {
              leads: s.leads, apr26: s.apr26, sold: s.sold, score };
   }).sort((a, b) => b.score - a.score);
 
-  // Funnel — har bir status uchun LIVE count (hozirgi status bo'yicha)
-  const funnel = RAW.funnel.map(f => ({
-    id: f.id, name: f.name,
-    count: statusCounts[f.id] || 0,
-    pct: total_leads ? (statusCounts[f.id] || 0) / total_leads : 0,
-  })).filter(f => f.count > 0)
-     .sort((a, b) => b.count - a.count);
+  // Konversiya funnel — FAQAT 4 ta asosiy status:
+  //   Sifatsiz · Qayta aloqa · O'ylab ko'radi · 26-aprel keladi
+  // (Sotilgan, Yo'qotilgan va boshqalar bu yerda ko'rinmaydi)
+  const isCoreFunnelStatus = (name, id) => {
+    const n = (name || '').toLowerCase();
+    if (n.includes('sifatsiz')) return true;
+    if (RAW.qayta_aloqa_id && id === RAW.qayta_aloqa_id) return true;
+    if (RAW.oylab_koradi_id && id === RAW.oylab_koradi_id) return true;
+    if (RAW.apr26_id && id === RAW.apr26_id) return true;
+    return false;
+  };
+  const coreFunnel = RAW.funnel
+    .filter(f => isCoreFunnelStatus(f.name, f.id))
+    .map(f => ({ id: f.id, name: f.name, count: statusCounts[f.id] || 0 }));
+  const funnelTotal = coreFunnel.reduce((sum, f) => sum + f.count, 0);
+  coreFunnel.forEach(f => f.pct = funnelTotal ? f.count / funnelTotal : 0);
+  const funnel = coreFunnel
+    .filter(f => f.count > 0)
+    .sort((a, b) => b.count - a.count);
 
   // Kunlik dinamika (Tashkent kuni bo'yicha)
   const TZ_MS = 5 * 3600 * 1000;
@@ -1384,7 +1396,7 @@ function computeStats(leads, calls) {
            total_leads, apr26, sold, lost, in_progress, conv,
            qayta_aloqa, qayta_aloqa_conv,
            oylab_koradi, oylab_koradi_conv,
-           mgr_rows, funnel, daily_leads, daily_calls, daily_duration,
+           mgr_rows, funnel, funnelTotal, daily_leads, daily_calls, daily_duration,
            hourly };
 }
 
@@ -1479,11 +1491,11 @@ function render(fromTs, toTs, label) {
       <td class="score">${m.score}</td>
     </tr>`).join('');
 
-  // Konversiya (LIVE) — total + funnel rows
-  $('conv-total').textContent = s.total_leads + ' ta';
+  // Konversiya (LIVE) — faqat 4 ta asosiy status (Sifatsiz, Qayta aloqa, O'ylab ko'radi, 26-aprel)
+  $('conv-total').textContent = s.funnelTotal + ' ta';
   $('conv-period').textContent = label ? ('Davr: ' + label) : '';
   if (s.funnel.length === 0) {
-    $('funnel-list').innerHTML = '<div class="funnel-empty">Bu davrda yaratilgan leadlar yo\u2018q</div>';
+    $('funnel-list').innerHTML = '<div class="funnel-empty">Bu davrda asosiy 4 statusdagi leadlar yo\u2018q</div>';
   } else {
     $('funnel-list').innerHTML = s.funnel.map(f => `
       <div class="funnel-row ${funnelCategory(f.name, f.id)}">
