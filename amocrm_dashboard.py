@@ -42,10 +42,18 @@ APRIL_26_STATUS_ID = 84110942
 # ----- Moi Zvonki (ixtiyoriy) -----
 # Agar MOIZVONKI_API_KEY env var o'rnatilgan bo'lsa, qo'ng'iroqlar amoCRM call
 # notes o'rniga to'g'ridan-to'g'ri PBX'dan olinadi (eng aniq ma'lumot).
-MOIZVONKI_DOMAIN = os.environ.get("MOIZVONKI_DOMAIN", "salohiyatschool.moizvonki.ru").strip()
-MOIZVONKI_USER_NAME = os.environ.get("MOIZVONKI_USER_NAME", "").strip()
-MOIZVONKI_API_KEY = os.environ.get("MOIZVONKI_API_KEY", "").strip()
-USE_MOIZVONKI = bool(MOIZVONKI_API_KEY and MOIZVONKI_USER_NAME)
+# 'or' ishlatamiz — env var bo'sh string bo'lsa ham default kuchga kiradi.
+MOIZVONKI_DOMAIN = (os.environ.get("MOIZVONKI_DOMAIN") or "salohiyatschool.moizvonki.ru").strip()
+# Tasodifan https:// prefiks qo'shilgan bo'lsa olib tashlaymiz
+if MOIZVONKI_DOMAIN.startswith("https://"):
+    MOIZVONKI_DOMAIN = MOIZVONKI_DOMAIN[8:]
+elif MOIZVONKI_DOMAIN.startswith("http://"):
+    MOIZVONKI_DOMAIN = MOIZVONKI_DOMAIN[7:]
+MOIZVONKI_DOMAIN = MOIZVONKI_DOMAIN.rstrip("/")  # oxiridagi / ni olib tashlaymiz
+
+MOIZVONKI_USER_NAME = (os.environ.get("MOIZVONKI_USER_NAME") or "").strip()
+MOIZVONKI_API_KEY = (os.environ.get("MOIZVONKI_API_KEY") or "").strip()
+USE_MOIZVONKI = bool(MOIZVONKI_API_KEY and MOIZVONKI_USER_NAME and MOIZVONKI_DOMAIN)
 
 # Site voronka (Toshkent leadlari)
 SITE_PIPELINE_ID = 10705250
@@ -164,6 +172,9 @@ def fetch_all():
 
     if USE_MOIZVONKI:
         print(f"5/5  Qo'ng'iroqlar Moi Zvonki'dan ({DAYS_BACK_CALLS} kun)...")
+        print(f"     Endpoint: https://{MOIZVONKI_DOMAIN}/api/v1")
+        print(f"     User:     {MOIZVONKI_USER_NAME}")
+        print(f"     API key:  {MOIZVONKI_API_KEY[:6]}...{MOIZVONKI_API_KEY[-4:]} (len={len(MOIZVONKI_API_KEY)})")
         try:
             from moizvonki_api import fetch_calls as mz_fetch, calls_to_dashboard_format
             mz_calls = mz_fetch(
