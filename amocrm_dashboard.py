@@ -734,7 +734,27 @@ def build_html(stats, data):
     <select id="mgrFilter" style="padding:7px 10px;border:1px solid #d1d5db;border-radius:8px;font-size:14px;font-family:inherit;min-width:200px">
       <option value="">Barchasi</option>
     </select>
+    <button id="editNamesBtn" style="background:#eef2ff;border:1px solid #c7d2fe;color:#3730a3;padding:7px 12px;border-radius:8px;font-size:13px;font-weight:600;cursor:pointer">✏️ Ismlarni tahrirlash</button>
     <span class="range-info" id="mgrInfo"></span>
+  </div>
+
+  <!-- Ism tahrirlash modal -->
+  <div id="nameEditOverlay" style="display:none;position:fixed;inset:0;background:rgba(15,23,42,0.5);z-index:1000;align-items:center;justify-content:center">
+    <div style="background:white;border-radius:14px;padding:24px;max-width:520px;width:92%;max-height:80vh;overflow-y:auto;box-shadow:0 20px 50px rgba(0,0,0,0.25)">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px">
+        <h3 style="margin:0;font-size:18px;color:#111827">✏️ Sotuvchi ismlarini tahrirlash</h3>
+        <button id="nameEditClose" style="background:none;border:none;font-size:22px;cursor:pointer;color:#6b7280;line-height:1">×</button>
+      </div>
+      <p style="color:#6b7280;font-size:13px;margin:0 0 14px 0">
+        Quyida har bir sotuvchining hozirgi raqamlari ko'rsatilgan. Ismlarni o'zgartiring va saqlang.
+        O'zgarishlar shu brauzerda saqlanadi va dashboard yangilanganda ham qoladi.
+      </p>
+      <div id="nameEditList" style="display:flex;flex-direction:column;gap:10px;margin-bottom:18px"></div>
+      <div style="display:flex;gap:8px;justify-content:flex-end">
+        <button id="nameEditReset" style="background:#fef2f2;border:1px solid #fecaca;color:#991b1b;padding:8px 14px;border-radius:8px;font-size:13px;cursor:pointer">Asl holatga qaytarish</button>
+        <button id="nameEditSave" style="background:#1d4ed8;border:none;color:white;padding:8px 18px;border-radius:8px;font-size:13px;font-weight:600;cursor:pointer">Saqlash</button>
+      </div>
+    </div>
   </div>
 
   <div class="section-title">🔹 Asosiy ko'rsatkichlar</div>
@@ -983,7 +1003,22 @@ function fmtDurationMin(sec) {
   return min.toFixed(1) + ' min';
 }
 
-function uname(uid) { return RAW.users[String(uid)] || "Noma'lum"; }
+// ---------- Ism override (foydalanuvchi tahriri, localStorage'da) ----------
+const NAME_OVERRIDE_KEY = 'amocrm_dashboard_name_overrides_v1';
+function getNameOverrides() {
+  try { return JSON.parse(localStorage.getItem(NAME_OVERRIDE_KEY) || '{}') || {}; }
+  catch (e) { return {}; }
+}
+function setNameOverrides(map) {
+  try { localStorage.setItem(NAME_OVERRIDE_KEY, JSON.stringify(map)); } catch (e) {}
+}
+let _nameOverrides = getNameOverrides();
+
+function uname(uid) {
+  const key = String(uid);
+  if (_nameOverrides[key]) return _nameOverrides[key];
+  return RAW.users[key] || "Noma'lum";
+}
 
 // ---------- Filter compute ----------
 function filterByRange(fromTs, toTs) {
@@ -1473,6 +1508,120 @@ document.querySelectorAll('.preset-btn').forEach(btn => {
 $('applyBtn').addEventListener('click', applyCustom);
 
 populateManagerDropdown();
+
+// ---------- Ism tahrirlash modal ----------
+function fmtSecsShort(s) {
+  s = s || 0;
+  const h = Math.floor(s / 3600), m = Math.floor((s % 3600) / 60);
+  if (h > 0) return h + 'soat ' + m + 'min';
+  return m + 'min';
+}
+
+function openNameEditor() {
+  // Har bir user_id uchun: hozirgi ism, qo'ng'iroqlar soni, javob berilgan, gaplashish vaqti
+  // Kontekst: 30 kunlik ma'lumot bilan ko'rsatamiz
+  const userStats = {};
+  for (const c of RAW.calls) {
+    const k = String(c.u);
+    if (!userStats[k]) userStats[k] = { total: 0, answered: 0, dur: 0 };
+    userStats[k].total += 1;
+    if ((c.d || 0) > 0) {
+      userStats[k].answered += 1;
+      userStats[k].dur += c.d;
+    }
+  }
+  // Lead'lar bo'yicha ham (qo'ng'iroq qilmagan, lekin lead'lar bor menejer)
+  for (const l of RAW.leads) {
+    const k = String(l.u);
+    if (!userStats[k]) userStats[k] = { total: 0, answered: 0, dur: 0 };
+  }
+
+  // Faqat aktiv user'lar (ma'lumoti borlari)
+  const activeIds = Object.keys(userStats).filter(k => k && k !== 'undefined' && k !== 'null');
+  // Qo'ng'iroqlar bo'yicha kamayish tartibida
+  activeIds.sort((a, b) => (userStats[b].total - userStats[a].total));
+
+  const list = $('nameEditList');
+  list.innerHTML = '';
+
+  if (activeIds.length === 0) {
+    list.innerHTML = '<div style="color:#9ca3af;font-size:13px">Hech qanday sotuvchi topilmadi.</div>';
+  }
+
+  for (const uid of activeIds) {
+    const st = userStats[uid];
+    const origName = RAW.users[uid] || ('User ' + uid);
+    const curName = _nameOverrides[uid] || origName;
+    const row = document.createElement('div');
+    row.style.cssText = 'border:1px solid #e5e7eb;border-radius:10px;padding:10px 12px;background:#f9fafb';
+    row.innerHTML = `
+      <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap">
+        <input data-uid="${uid}" class="name-edit-input" type="text" value="${curName.replace(/"/g, '&quot;')}"
+               style="flex:1;min-width:160px;padding:7px 10px;border:1px solid #d1d5db;border-radius:7px;font-size:14px;font-family:inherit"/>
+        <span style="font-size:12px;color:#6b7280;white-space:nowrap">
+          📞 <b style="color:#1d4ed8">${st.total}</b>
+          · ✓ <b style="color:#059669">${st.answered}</b>
+          · ⏱ <b>${fmtSecsShort(st.dur)}</b>
+        </span>
+      </div>
+      <div style="font-size:11px;color:#9ca3af;margin-top:4px">
+        Asl: ${origName}${_nameOverrides[uid] ? ' (override)' : ''}
+      </div>
+    `;
+    list.appendChild(row);
+  }
+
+  $('nameEditOverlay').style.display = 'flex';
+}
+
+function closeNameEditor() {
+  $('nameEditOverlay').style.display = 'none';
+}
+
+function saveNameEdits() {
+  const inputs = document.querySelectorAll('.name-edit-input');
+  const newOverrides = {};
+  for (const inp of inputs) {
+    const uid = inp.dataset.uid;
+    const newName = (inp.value || '').trim();
+    const origName = RAW.users[uid] || ('User ' + uid);
+    // Faqat asl ismdan farq qilsa override saqlaymiz
+    if (newName && newName !== origName) {
+      newOverrides[uid] = newName;
+    }
+  }
+  _nameOverrides = newOverrides;
+  setNameOverrides(newOverrides);
+  closeNameEditor();
+
+  // Dropdown'ni qaytadan to'ldiramiz va render qaytadan
+  const sel = $('mgrFilter');
+  // Eski activeManager nomi yangilangan bo'lishi mumkin — bo'shatamiz
+  activeManager = '';
+  while (sel.options.length > 1) sel.remove(1);
+  populateManagerDropdown();
+  if (lastFrom && lastTo) render(lastFrom, lastTo, lastLabel);
+}
+
+function resetNameEdits() {
+  if (!confirm("Barcha ism o'zgarishlarini o'chirib, asl holatga qaytarmoqchimisiz?")) return;
+  _nameOverrides = {};
+  setNameOverrides({});
+  closeNameEditor();
+  const sel = $('mgrFilter');
+  activeManager = '';
+  while (sel.options.length > 1) sel.remove(1);
+  populateManagerDropdown();
+  if (lastFrom && lastTo) render(lastFrom, lastTo, lastLabel);
+}
+
+$('editNamesBtn').addEventListener('click', openNameEditor);
+$('nameEditClose').addEventListener('click', closeNameEditor);
+$('nameEditSave').addEventListener('click', saveNameEdits);
+$('nameEditReset').addEventListener('click', resetNameEdits);
+$('nameEditOverlay').addEventListener('click', (e) => {
+  if (e.target.id === 'nameEditOverlay') closeNameEditor();
+});
 
 // Dastlabki render — oxirgi 30 kun
 applyPreset('30');
