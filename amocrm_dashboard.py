@@ -55,6 +55,22 @@ MOIZVONKI_USER_NAME = (os.environ.get("MOIZVONKI_USER_NAME") or "").strip()
 MOIZVONKI_API_KEY = (os.environ.get("MOIZVONKI_API_KEY") or "").strip()
 USE_MOIZVONKI = bool(MOIZVONKI_API_KEY and MOIZVONKI_USER_NAME and MOIZVONKI_DOMAIN)
 
+# ----- Moi Zvonki ism override -----
+# amoCRM'dagi user ism noto'g'ri bo'lsa (masalan, "Admin" deb yozilgan-u, aslida
+# Begzod ishlatadi), bu yerda email orqali to'g'ri ismni majburlash mumkin.
+# Email pastki registr (lowercase) bo'lishi shart.
+# Misol:
+#   MOIZVONKI_NAME_OVERRIDES = {
+#       "begzod@salohiyat.uz": "Begzod",
+#       "jamshid@salohiyat.uz": "Jamshid",
+#   }
+MOIZVONKI_NAME_OVERRIDES = {
+    # Moi Zvonki kabinet → Sozlamalar → Foydalanuvchilar dan olingan
+    "salohiyatschool@gmail.com": "Jamshid",
+    "dilshodxaydarov1987@gmail.com": "Begzod",
+    "tulkinovabduvohid12@gmail.com": "Sotuv manager (Ruslan)",
+}
+
 # Site voronka (Toshkent leadlari)
 SITE_PIPELINE_ID = 10705250
 SITE_TOSHKENT_STATUS_ID = 84347286          # 'Toshkent' statusi
@@ -204,6 +220,21 @@ def fetch_all():
             )
             # Yangi user_map — MoiZvonki email'lari ham ichida (agar amoCRM'da yo'q bo'lsa)
             calls_source = "moizvonki"
+
+            # ----- Ism override (amoCRM'dagi nom Moi Zvonki nomidan farq qilsa) -----
+            if MOIZVONKI_NAME_OVERRIDES:
+                applied = 0
+                for em, correct_name in MOIZVONKI_NAME_OVERRIDES.items():
+                    em = em.strip().lower()
+                    uid = email_to_user_id.get(em)
+                    if uid is not None and uid in user_map:
+                        old = user_map[uid]
+                        if old != correct_name:
+                            user_map[uid] = correct_name
+                            print(f"     ↻ ism override: '{old}' → '{correct_name}' (email={em})")
+                            applied += 1
+                if applied:
+                    print(f"     ✓ {applied} ism to'g'rilandi (override)")
         except Exception as e:
             print(f"     ⚠ Moi Zvonki xatosi: {e}")
             print(f"     ➜ AmoCRM call notes'larga qaytyapman (zaxira)")
