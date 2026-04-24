@@ -521,7 +521,10 @@ def build_html(stats, data):
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<meta http-equiv="refresh" content="900">
+<!-- Kesh ishlatma — har safar yangi versiyasini olamiz -->
+<meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate, max-age=0">
+<meta http-equiv="Pragma" content="no-cache">
+<meta http-equiv="Expires" content="0">
 <meta name="robots" content="noindex, nofollow, noarchive, nosnippet">
 <meta name="googlebot" content="noindex, nofollow">
 <title>amoCRM Dashboard — Salohiyat</title>
@@ -708,13 +711,54 @@ def build_html(stats, data):
     margin-top: 40px;
     padding: 20px;
   }
+
+  /* ============ Mobil ekranlar uchun ============ */
+  @media (max-width: 768px) {
+    body { padding: 12px; }
+    .container { padding: 0; }
+    header { padding: 18px 16px; border-radius: 12px; margin-bottom: 14px; }
+    header h1 { font-size: 20px; line-height: 1.25; }
+    header .sub { font-size: 12px; }
+    .filter-bar { padding: 12px 14px; gap: 8px; margin-bottom: 16px; border-radius: 10px; }
+    .filter-bar .label { font-size: 12px; margin-right: 0; }
+    .preset-btn, .apply-btn { padding: 7px 12px; font-size: 13px; }
+    input[type="date"] { padding: 6px 8px; font-size: 13px; }
+    .section-title { font-size: 15px; margin: 18px 0 10px; }
+    .kpi-grid { grid-template-columns: repeat(2, 1fr) !important; gap: 10px; }
+    .kpi { padding: 12px 14px; }
+    .kpi .label { font-size: 12px; }
+    .kpi .value { font-size: 26px; }
+    .kpi .sub { font-size: 11px; }
+    table { font-size: 12px; }
+    th, td { padding: 8px 6px; }
+    /* Modal ham qulay bo'lsin */
+    #nameEditOverlay > div { padding: 16px !important; }
+    /* Yangilash tugmasi */
+    #hardRefreshBtn { font-size: 12px; padding: 6px 10px; }
+  }
+
+  @media (max-width: 480px) {
+    .kpi-grid { grid-template-columns: 1fr !important; }
+    header h1 { font-size: 18px; }
+    .filter-bar { flex-direction: column; align-items: stretch; }
+    .filter-bar > * { width: 100%; }
+    select#mgrFilter { min-width: 0 !important; width: 100%; }
+  }
 </style>
 </head>
 <body>
 <div class="container">
   <header>
-    <h1>📊 amoCRM Dashboard — Salohiyat</h1>
-    <div class="sub">Yangilangan: __GENERATED_AT__ · Ma'lumotlar: oxirgi __DAYS_BACK__ kun · Qo'ng'iroqlar manbai: <b>__CALLS_SOURCE__</b></div>
+    <div style="display:flex;align-items:flex-start;justify-content:space-between;gap:10px;flex-wrap:wrap">
+      <div style="flex:1;min-width:0">
+        <h1>📊 amoCRM Dashboard — Salohiyat</h1>
+        <div class="sub">Yangilangan: __GENERATED_AT__ · Ma'lumotlar: oxirgi __DAYS_BACK__ kun · Qo'ng'iroqlar manbai: <b>__CALLS_SOURCE__</b></div>
+      </div>
+      <button id="hardRefreshBtn" title="Eng yangi versiyasini olish (kesh tozalanadi)"
+              style="background:rgba(255,255,255,0.18);border:1px solid rgba(255,255,255,0.3);color:white;padding:8px 14px;border-radius:8px;font-size:13px;font-weight:600;cursor:pointer;white-space:nowrap">
+        🔄 Yangilash
+      </button>
+    </div>
   </header>
 
   <div class="filter-bar">
@@ -1623,8 +1667,40 @@ $('nameEditOverlay').addEventListener('click', (e) => {
   if (e.target.id === 'nameEditOverlay') closeNameEditor();
 });
 
+// Manual yangilash tugmasi (header'da)
+const _hardRefreshBtn = document.getElementById('hardRefreshBtn');
+if (_hardRefreshBtn) {
+  _hardRefreshBtn.addEventListener('click', function () {
+    const url = new URL(window.location.href);
+    url.searchParams.set('v', Date.now());
+    window.location.replace(url.toString());
+  });
+}
+
 // Dastlabki render — oxirgi 30 kun
 applyPreset('30');
+
+// ---------- Avtomatik yangilanish (kesh-buster bilan) ----------
+// Har 15 daqiqada sahifa o'zini qayta yuklaydi va URL'ga ?v=timestamp qo'shadi —
+// shunda telefon/brauzer eski keshlangan versiyani ishlatmaydi.
+setTimeout(function () {
+  const url = new URL(window.location.href);
+  url.searchParams.set('v', Date.now());
+  window.location.replace(url.toString());
+}, 15 * 60 * 1000);
+
+// Sahifa fokus oldida (telefon ekranini ochganda) ham 5 daqiqadan eski bo'lsa yangilaymiz
+let _pageLoadedAt = Date.now();
+document.addEventListener('visibilitychange', function () {
+  if (document.visibilityState === 'visible') {
+    const ageMin = (Date.now() - _pageLoadedAt) / 60000;
+    if (ageMin > 5) {
+      const url = new URL(window.location.href);
+      url.searchParams.set('v', Date.now());
+      window.location.replace(url.toString());
+    }
+  }
+});
 </script>
 </body>
 </html>"""
