@@ -825,6 +825,23 @@ def build_html(stats, data):
   .funnel-row.success .progress-fill { background: linear-gradient(90deg, #14b8a6, #2dd4bf); }
   .funnel-row.purple .count { color: #7c3aed; }
   .funnel-row.purple .progress-fill { background: linear-gradient(90deg, #8b5cf6, #a78bfa); }
+  /* "Sifatli lead" — yig'indi qatori, ajratib ko'rsatiladi */
+  .funnel-row.highlight {
+    background: linear-gradient(90deg, #ecfdf5 0%, #f0fdf4 100%);
+    border-left: 4px solid #10b981;
+    padding-left: 18px;
+  }
+  .funnel-row.highlight .name {
+    font-weight: 700;
+    font-size: 15px;
+    color: #065f46;
+  }
+  .funnel-row.highlight .name::before {
+    content: "\2728  ";
+    margin-right: 2px;
+  }
+  .funnel-row.highlight .count { font-size: 20px; }
+  .funnel-row.highlight .progress { height: 12px; }
   .funnel-empty {
     padding: 28px 22px;
     text-align: center;
@@ -1142,13 +1159,13 @@ def build_html(stats, data):
   <div class="conv-card">
     <div class="conv-summary">
       <div class="total-block">
-        <div class="total-lbl">Tanlangan davrdagi asosiy 4 statusda</div>
+        <div class="total-lbl">Tanlangan davrda umumiy lead</div>
         <div class="total-num" id="conv-total">0</div>
         <div class="total-sub" id="conv-period">—</div>
       </div>
       <div class="note">
         <span class="live-dot"></span>
-        Faqat <b>Sifatsiz · Qayta aloqa · O'ylab ko'radi · 26-aprel keladi</b>.
+        <b>Sifatli lead</b> = O'ylab ko'radi + 26-aprel keladi.
         Har bir leadning <b>HOZIRGI</b> statusi — manager bosqichni o'zgartirsa, darhol yangilanadi.
       </div>
     </div>
@@ -1317,9 +1334,16 @@ function computeStats(leads, calls) {
              leads: s.leads, apr26: s.apr26, sold: s.sold, score };
   }).sort((a, b) => b.score - a.score);
 
-  // Konversiya funnel — FAQAT 4 ta asosiy status:
-  //   Sifatsiz · Qayta aloqa · O'ylab ko'radi · 26-aprel keladi
-  // (Sotilgan, Yo'qotilgan va boshqalar bu yerda ko'rinmaydi)
+  // Konversiya funnel — yangi struktura (foydalanuvchi xohlagan tartib):
+  //   1. Umumiy lead (yuqorida — funnelTotal)
+  //   2. Sifatli lead = O'ylab ko'radi + 26-aprel keladi
+  //   3. O'ylab ko'radi
+  //   4. 26-aprel keladi
+  // Umumiy = Sifatsiz + Qayta aloqa + O'ylab + 26-aprel (4 ta asosiy statusning yig'indisi)
+  const findStatusName = (id, fallback) => {
+    const s = RAW.funnel.find(f => f.id === id);
+    return s ? s.name : fallback;
+  };
   const isCoreFunnelStatus = (name, id) => {
     const n = (name || '').toLowerCase();
     if (n.includes('sifatsiz')) return true;
@@ -1332,10 +1356,20 @@ function computeStats(leads, calls) {
     .filter(f => isCoreFunnelStatus(f.name, f.id))
     .map(f => ({ id: f.id, name: f.name, count: statusCounts[f.id] || 0 }));
   const funnelTotal = coreFunnel.reduce((sum, f) => sum + f.count, 0);
-  coreFunnel.forEach(f => f.pct = funnelTotal ? f.count / funnelTotal : 0);
-  const funnel = coreFunnel
-    .filter(f => f.count > 0)
-    .sort((a, b) => b.count - a.count);
+
+  const oylabCount = RAW.oylab_koradi_id ? (statusCounts[RAW.oylab_koradi_id] || 0) : 0;
+  const apr26Count = RAW.apr26_id ? (statusCounts[RAW.apr26_id] || 0) : 0;
+  const sifatliCount = oylabCount + apr26Count;
+  const pctOf = (n) => funnelTotal ? n / funnelTotal : 0;
+
+  const funnel = [
+    { id: '_sifatli', name: 'Sifatli lead', count: sifatliCount,
+      pct: pctOf(sifatliCount), category: 'success', isHighlight: true },
+    { id: RAW.oylab_koradi_id, name: findStatusName(RAW.oylab_koradi_id, "O\u2018ylab ko\u2018radi"),
+      count: oylabCount, pct: pctOf(oylabCount), category: 'purple' },
+    { id: RAW.apr26_id, name: findStatusName(RAW.apr26_id, '26-aprel keladi'),
+      count: apr26Count, pct: pctOf(apr26Count), category: 'good' },
+  ];
 
   // Kunlik dinamika (Tashkent kuni bo'yicha)
   const TZ_MS = 5 * 3600 * 1000;
@@ -1491,21 +1525,25 @@ function render(fromTs, toTs, label) {
       <td class="score">${m.score}</td>
     </tr>`).join('');
 
-  // Konversiya (LIVE) — faqat 4 ta asosiy status (Sifatsiz, Qayta aloqa, O'ylab ko'radi, 26-aprel)
+  // Konversiya (LIVE) — Umumiy + Sifatli + O'ylab + 26-aprel
   $('conv-total').textContent = s.funnelTotal + ' ta';
   $('conv-period').textContent = label ? ('Davr: ' + label) : '';
-  if (s.funnel.length === 0) {
-    $('funnel-list').innerHTML = '<div class="funnel-empty">Bu davrda asosiy 4 statusdagi leadlar yo\u2018q</div>';
+  if (s.funnelTotal === 0) {
+    $('funnel-list').innerHTML = '<div class="funnel-empty">Bu davrda asosiy statuslarda leadlar yo\u2018q</div>';
   } else {
-    $('funnel-list').innerHTML = s.funnel.map(f => `
-      <div class="funnel-row ${funnelCategory(f.name, f.id)}">
+    $('funnel-list').innerHTML = s.funnel.map(f => {
+      const cat = f.category || funnelCategory(f.name, f.id);
+      const highlightCls = f.isHighlight ? ' highlight' : '';
+      return `
+      <div class="funnel-row ${cat}${highlightCls}">
         <div class="top">
           <div class="name">${f.name}</div>
           <div class="count">${f.count} ta</div>
           <div class="pct">${(f.pct*100).toFixed(1)}%</div>
         </div>
         <div class="progress"><div class="progress-fill" style="width:${Math.max(2, f.pct*100)}%"></div></div>
-      </div>`).join('');
+      </div>`;
+    }).join('');
   }
 
   // Site funnel table
