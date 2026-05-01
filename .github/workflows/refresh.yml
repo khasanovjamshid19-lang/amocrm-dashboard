@@ -1,11 +1,11 @@
 name: Refresh amoCRM Dashboard
 
 on:
-  # Har 15 daqiqada avtomatik yangilanadi.
+  # Har 10 daqiqada avtomatik yangilanadi.
   # Eslatma: GitHub cron aniq vaqtda ishlamaydi — peak soatlarda 1-5 daqiqa
   # kechikish bo'lishi mumkin. Bu normal holat.
   schedule:
-    - cron: "*/15 * * * *"
+    - cron: "*/10 * * * *"
 
   # Push bo'lganda ham yangilaydi (test uchun)
   push:
