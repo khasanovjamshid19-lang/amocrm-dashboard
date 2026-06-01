@@ -368,7 +368,12 @@ def fetch_all():
             "name": p.get("name", ""),
             "statuses": p_statuses,
             "leads": [
-                {"s": l.get("status_id"), "u": l.get("responsible_user_id"), "t": l.get("created_at", 0)}
+                {
+                    "s": l.get("status_id"),
+                    "u": l.get("responsible_user_id"),  # mas'ul (lead egasi)
+                    "lu": l.get("updated_by"),          # oxirgi harakat qiluvchi
+                    "t": l.get("created_at", 0),
+                }
                 for l in p_leads
             ],
         })
@@ -1131,9 +1136,9 @@ def build_html(stats, data):
   <div class="filter-bar">
     <span class="label">📅 Davr:</span>
     <button class="preset-btn" data-preset="today">Bugun</button>
-    <button class="preset-btn" data-preset="yesterday">Kecha</button>
+    <button class="preset-btn active" data-preset="yesterday">Kecha</button>
     <button class="preset-btn" data-preset="7">Oxirgi 7 kun</button>
-    <button class="preset-btn active" data-preset="30">Oxirgi 30 kun</button>
+    <button class="preset-btn" data-preset="30">Oxirgi 30 kun</button>
     <span style="color:#d1d5db">|</span>
     <input type="date" id="dateFrom"> –
     <input type="date" id="dateTo">
@@ -1882,9 +1887,14 @@ function computePipelineFunnel(pipeline, fromTs, toTs, visitReason, managerFilte
     statusMap[s.id] = { stage: s.stage, visit: s.visit, name: s.name };
   }
   // Davr + sotuvchi bo'yicha filtrlangan leadlar
+  // Sotuvchi: 'lu' (updated_by) — oxirgi harakat qiluvchi (Moi Zvonki bilan mos)
+  // Agar lu yo'q bo'lsa, 'u' (responsible_user) ga qaytamiz
   const leads = (pipeline.leads || []).filter(l => {
     if (l.t < fromTs || l.t >= toTs) return false;
-    if (managerFilter && managerFilter !== 'ALL' && uname(l.u) !== managerFilter) return false;
+    if (managerFilter && managerFilter !== 'ALL') {
+      const actor = l.lu != null ? l.lu : l.u;
+      if (uname(actor) !== managerFilter) return false;
+    }
     return true;
   });
 
@@ -2067,11 +2077,12 @@ function populateFunnelManagerDropdown() {
     ? pipelines
     : pipelines.filter(p => String(p.id) === selectedPipeline);
 
-  // Faol sotuvchilarni yig'amiz
+  // Faol sotuvchilarni yig'amiz (oxirgi harakat qiluvchi: lu yoki u)
   const activeUsers = new Map();  // name → leadCount
   for (const p of targetPipelines) {
     for (const l of (p.leads || [])) {
-      const nm = uname(l.u);
+      const actor = l.lu != null ? l.lu : l.u;
+      const nm = uname(actor);
       if (nm === "Noma'lum") continue;
       activeUsers.set(nm, (activeUsers.get(nm) || 0) + 1);
     }
@@ -2481,7 +2492,8 @@ if (_hardRefreshBtn) {
 }
 
 // Dastlabki render — oxirgi 30 kun
-applyPreset('30');
+// Dashboard ochilganda default: Kecha
+applyPreset('yesterday');
 
 // ---------- Avtomatik yangilanish (kesh-buster bilan) ----------
 // Har 10 daqiqada sahifa o'zini qayta yuklaydi va URL'ga ?v=timestamp qo'shadi —
