@@ -344,6 +344,33 @@ def fetch_all():
         if any(pat in nm for pat in FUNNEL_PIPELINE_NAME_PATTERNS):
             target_pipeline_ids.add(p["id"])
 
+    # === Lead status o'zgarishi event'larini yig'amiz (so'nggi 90 kun) ===
+    # Maqsad: HAR lead uchun "oxirgi status o'zgarishini kim qildi" — bu eng to'g'ri
+    # "sotuvchi" attributi (responsible_user yoki updated_by'dan ko'ra aniqroq).
+    print("📅  Status o'zgarish event'larini yuklamoqda...")
+    events_start = end_ts - 90 * 86400
+    status_events = paginate(
+        "/events",
+        {
+            "filter[type][]": ["lead_status_changed", "entity_responsible_changed"],
+            "filter[entity]": "lead",
+            "filter[created_at][from]": events_start,
+            "filter[created_at][to]": end_ts,
+        },
+        max_items=30000,
+    )
+    # entity_id (lead_id) → (max_created_at, created_by)
+    last_actor_by_lead = {}
+    for ev in status_events:
+        eid = ev.get("entity_id")
+        if not eid:
+            continue
+        at = ev.get("created_at", 0)
+        prev = last_actor_by_lead.get(eid)
+        if prev is None or at > prev[0]:
+            last_actor_by_lead[eid] = (at, ev.get("created_by"))
+    print(f"     ✓ {len(status_events)} event,  unikal lead: {len(last_actor_by_lead)}")
+
     funnel_pipelines = []
     for p in pipelines:
         if p["id"] not in target_pipeline_ids:
@@ -363,6 +390,14 @@ def fetch_all():
             {"filter[pipeline_id]": p["id"], "order[created_at]": "desc"},
             max_items=FUNNEL_LEADS_PER_PIPELINE,
         )
+
+        def _last_actor(l):
+            """Oxirgi status o'zgartirgan user_id; fallback: updated_by → responsible."""
+            ev = last_actor_by_lead.get(l.get("id"))
+            if ev and ev[1]:
+                return ev[1]
+            return l.get("updated_by") or l.get("responsible_user_id")
+
         funnel_pipelines.append({
             "id": p["id"],
             "name": p.get("name", ""),
@@ -371,7 +406,7 @@ def fetch_all():
                 {
                     "s": l.get("status_id"),
                     "u": l.get("responsible_user_id"),  # mas'ul (lead egasi)
-                    "lu": l.get("updated_by"),          # oxirgi harakat qiluvchi
+                    "lu": _last_actor(l),               # oxirgi harakat qiluvchi (events orqali aniq)
                     "t": l.get("created_at", 0),
                 }
                 for l in p_leads
