@@ -1404,12 +1404,16 @@ def build_html(stats, data):
   <section class="tab-section" data-tab="marketing">
   <!-- =================== MARKETING FUNNEL =================== -->
   <div class="section-title">📈 Marketing Funnel — Konversiyalar</div>
-  <div class="filter-bar" style="margin-bottom:10px">
+  <div class="filter-bar" style="margin-bottom:10px;flex-wrap:wrap">
     <span class="label">🎯 Voronka:</span>
-    <select id="funnelPipeline" style="padding:7px 10px;border:1px solid #d1d5db;border-radius:8px;font-size:14px;font-family:inherit;min-width:220px">
+    <select id="funnelPipeline" style="padding:7px 10px;border:1px solid #d1d5db;border-radius:8px;font-size:14px;font-family:inherit;min-width:200px">
       <option value="ALL">Hammasi (umumiy)</option>
     </select>
-    <span class="label" style="margin-left:14px">🚶 Tashrif sababi:</span>
+    <span class="label" style="margin-left:8px">👤 Sotuvchi:</span>
+    <select id="funnelManager" style="padding:7px 10px;border:1px solid #d1d5db;border-radius:8px;font-size:14px;font-family:inherit;min-width:180px">
+      <option value="ALL">Barchasi</option>
+    </select>
+    <span class="label" style="margin-left:8px">🚶 Tashrif sababi:</span>
     <select id="funnelVisitReason" style="padding:7px 10px;border:1px solid #d1d5db;border-radius:8px;font-size:14px;font-family:inherit;min-width:180px">
       <option value="ALL">Hammasi</option>
       <option value="imtihon">📝 Imtihon</option>
@@ -1871,14 +1875,18 @@ function render(fromTs, toTs, label) {
 // ============================================================
 // MARKETING FUNNEL — KONVERSIYALAR
 // ============================================================
-function computePipelineFunnel(pipeline, fromTs, toTs, visitReason) {
+function computePipelineFunnel(pipeline, fromTs, toTs, visitReason, managerFilter) {
   // Status ID → {stage, visit} xaritasi
   const statusMap = {};
   for (const s of (pipeline.statuses || [])) {
     statusMap[s.id] = { stage: s.stage, visit: s.visit, name: s.name };
   }
-  // Davr bo'yicha filtrlangan leadlar
-  const leads = (pipeline.leads || []).filter(l => l.t >= fromTs && l.t < toTs);
+  // Davr + sotuvchi bo'yicha filtrlangan leadlar
+  const leads = (pipeline.leads || []).filter(l => {
+    if (l.t < fromTs || l.t >= toTs) return false;
+    if (managerFilter && managerFilter !== 'ALL' && uname(l.u) !== managerFilter) return false;
+    return true;
+  });
 
   // Visit reason filter — agar tanlangan bo'lsa, statuslarda mos kelganlarni qoldiramiz
   // Lekin "yangi" statusiga doim hisoblanadi (chunki visit reason hali aniq emas)
@@ -1926,19 +1934,20 @@ function renderMarketingFunnel(fromTs, toTs) {
 
   const selectedPipeline = $('funnelPipeline').value || 'ALL';
   const visitReason = $('funnelVisitReason').value || 'ALL';
+  const managerFilter = $('funnelManager').value || 'ALL';
 
   // Agar UMUMIY tanlangan bo'lsa — barcha voronkalarning yig'indisini olamiz
   let agg;
   if (selectedPipeline === 'ALL') {
     agg = { yangi: 0, rozi: 0, tashrif: 0, sotuv: 0, sifatsiz: 0, bekor: 0, boshqa: 0 };
     for (const p of pipelines) {
-      const f = computePipelineFunnel(p, fromTs, toTs, visitReason);
+      const f = computePipelineFunnel(p, fromTs, toTs, visitReason, managerFilter);
       for (const k of Object.keys(agg)) agg[k] += f[k];
     }
   } else {
     const p = pipelines.find(p => String(p.id) === selectedPipeline);
     if (p) {
-      agg = computePipelineFunnel(p, fromTs, toTs, visitReason);
+      agg = computePipelineFunnel(p, fromTs, toTs, visitReason, managerFilter);
     } else {
       agg = { yangi: 0, rozi: 0, tashrif: 0, sotuv: 0, sifatsiz: 0, bekor: 0, boshqa: 0 };
     }
@@ -1988,7 +1997,7 @@ function renderMarketingFunnel(fromTs, toTs) {
   const bd = $('funnel-pipeline-breakdown');
   if (selectedPipeline === 'ALL' && pipelines.length > 1) {
     const rows = pipelines.map(p => {
-      const f = computePipelineFunnel(p, fromTs, toTs, visitReason);
+      const f = computePipelineFunnel(p, fromTs, toTs, visitReason, managerFilter);
       return { ...f, ovr: f.yangi ? (f.sotuv / f.yangi * 100).toFixed(1) : '–' };
     }).filter(r => r.yangi > 0);
     if (rows.length === 0) {
@@ -2032,11 +2041,55 @@ function populateFunnelPipelineDropdown() {
     sel.appendChild(o);
   }
   sel.addEventListener('change', () => {
+    populateFunnelManagerDropdown();
     if (lastFrom && lastTo) renderMarketingFunnel(lastFrom, lastTo);
   });
   $('funnelVisitReason').addEventListener('change', () => {
     if (lastFrom && lastTo) renderMarketingFunnel(lastFrom, lastTo);
   });
+  $('funnelManager').addEventListener('change', () => {
+    if (lastFrom && lastTo) renderMarketingFunnel(lastFrom, lastTo);
+  });
+  // Dastlabki sotuvchilar ro'yxatini chiqaramiz
+  populateFunnelManagerDropdown();
+}
+
+// Tanlangan voronkadagi faol sotuvchilar bilan dropdown'ni to'ldiramiz
+function populateFunnelManagerDropdown() {
+  const sel = $('funnelManager');
+  const prev = sel.value;
+  // Hammasini tozalaymiz (faqat "Barchasi" qoldiramiz)
+  while (sel.options.length > 1) sel.remove(1);
+
+  const selectedPipeline = $('funnelPipeline').value || 'ALL';
+  const pipelines = RAW.funnel_pipelines || [];
+  const targetPipelines = (selectedPipeline === 'ALL')
+    ? pipelines
+    : pipelines.filter(p => String(p.id) === selectedPipeline);
+
+  // Faol sotuvchilarni yig'amiz
+  const activeUsers = new Map();  // name → leadCount
+  for (const p of targetPipelines) {
+    for (const l of (p.leads || [])) {
+      const nm = uname(l.u);
+      if (nm === "Noma'lum") continue;
+      activeUsers.set(nm, (activeUsers.get(nm) || 0) + 1);
+    }
+  }
+  // Lead miqdoriga qarab kamayish tartibida
+  const sorted = Array.from(activeUsers.entries()).sort((a, b) => b[1] - a[1]);
+  for (const [name, count] of sorted) {
+    const o = document.createElement('option');
+    o.value = name;
+    o.textContent = `${name}  (${count})`;
+    sel.appendChild(o);
+  }
+  // Avvalgi tanlovni qaytarishga harakat qilamiz
+  if (prev && Array.from(sel.options).some(o => o.value === prev)) {
+    sel.value = prev;
+  } else {
+    sel.value = 'ALL';
+  }
 }
 
 function drawCharts(s) {
