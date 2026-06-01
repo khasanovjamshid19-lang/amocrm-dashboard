@@ -347,29 +347,38 @@ def fetch_all():
     # === Lead status o'zgarishi event'larini yig'amiz (so'nggi 90 kun) ===
     # Maqsad: HAR lead uchun "oxirgi status o'zgarishini kim qildi" — bu eng to'g'ri
     # "sotuvchi" attributi (responsible_user yoki updated_by'dan ko'ra aniqroq).
+    # Try/except — agar /events xatosi bo'lsa, skript crash bo'lmaydi, fallback ishlaydi
     print("📅  Status o'zgarish event'larini yuklamoqda...")
     events_start = end_ts - 90 * 86400
-    status_events = paginate(
-        "/events",
-        {
-            "filter[type][]": ["lead_status_changed", "entity_responsible_changed"],
-            "filter[entity]": "lead",
-            "filter[created_at][from]": events_start,
-            "filter[created_at][to]": end_ts,
-        },
-        max_items=30000,
-    )
-    # entity_id (lead_id) → (max_created_at, created_by)
     last_actor_by_lead = {}
-    for ev in status_events:
-        eid = ev.get("entity_id")
-        if not eid:
-            continue
-        at = ev.get("created_at", 0)
-        prev = last_actor_by_lead.get(eid)
-        if prev is None or at > prev[0]:
-            last_actor_by_lead[eid] = (at, ev.get("created_by"))
-    print(f"     ✓ {len(status_events)} event,  unikal lead: {len(last_actor_by_lead)}")
+    try:
+        status_events = paginate(
+            "/events",
+            {
+                "filter[type][]": ["lead_status_changed"],
+                "filter[created_at][from]": events_start,
+                "filter[created_at][to]": end_ts,
+            },
+            max_items=30000,
+        )
+        # entity_id (lead_id) → (max_created_at, created_by)
+        for ev in status_events:
+            if ev.get("type") != "lead_status_changed":
+                continue
+            eid = ev.get("entity_id")
+            if not eid:
+                continue
+            at = ev.get("created_at", 0)
+            by = ev.get("created_by")
+            if not by:
+                continue
+            prev = last_actor_by_lead.get(eid)
+            if prev is None or at > prev[0]:
+                last_actor_by_lead[eid] = (at, by)
+        print(f"     ✓ {len(status_events)} event,  unikal lead: {len(last_actor_by_lead)}")
+    except Exception as e:
+        print(f"     ⚠ /events xatosi: {e}")
+        print(f"     ➜ updated_by → responsible_user_id fallback'ga o'tamiz")
 
     funnel_pipelines = []
     for p in pipelines:
