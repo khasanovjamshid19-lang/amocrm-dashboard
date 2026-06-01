@@ -646,9 +646,79 @@ def build_html(stats, data):
     font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
     background: #f5f7fa;
     color: #1f2937;
-    padding: 24px;
+    padding: 0;
+    margin: 0;
   }
-  .container { max-width: 1400px; margin: 0 auto; }
+  .app { display: flex; min-height: 100vh; }
+  .sidebar {
+    width: 220px;
+    background: linear-gradient(180deg, #1e3a8a 0%, #1e40af 100%);
+    color: white;
+    padding: 24px 0;
+    box-shadow: 2px 0 10px rgba(0,0,0,0.08);
+    position: sticky; top: 0; align-self: flex-start; height: 100vh;
+    overflow-y: auto; flex-shrink: 0;
+  }
+  .sidebar-brand {
+    padding: 0 22px 22px;
+    font-size: 16px; font-weight: 700;
+    border-bottom: 1px solid rgba(255,255,255,0.12);
+    margin-bottom: 14px;
+  }
+  .nav-item {
+    display: flex; align-items: center; gap: 12px;
+    padding: 12px 22px; cursor: pointer;
+    font-size: 14px; font-weight: 500;
+    color: rgba(255,255,255,0.78);
+    border-left: 3px solid transparent;
+    transition: all 0.15s;
+  }
+  .nav-item:hover { background: rgba(255,255,255,0.07); color: white; }
+  .nav-item.active {
+    background: rgba(255,255,255,0.12);
+    color: white;
+    border-left-color: #60a5fa;
+    font-weight: 600;
+  }
+  .nav-icon { font-size: 17px; width: 20px; text-align: center; }
+  .nav-divider {
+    margin: 14px 22px; height: 1px;
+    background: rgba(255,255,255,0.1);
+  }
+  .nav-section-label {
+    padding: 0 22px; margin: 14px 0 6px;
+    font-size: 11px; font-weight: 700;
+    letter-spacing: 0.06em; text-transform: uppercase;
+    color: rgba(255,255,255,0.45);
+  }
+  .main-area { flex: 1; min-width: 0; padding: 24px; }
+  .container { max-width: 1280px; margin: 0 auto; }
+
+  /* Tab panes */
+  .tab-pane { display: none; }
+  .tab-pane.active { display: block; }
+
+  /* Mobile sidebar */
+  .sidebar-toggle {
+    display: none;
+    background: #1e3a8a; color: white; border: none;
+    padding: 10px 14px; border-radius: 8px; font-size: 14px;
+    margin-bottom: 12px; cursor: pointer;
+  }
+  @media (max-width: 900px) {
+    .sidebar {
+      position: fixed; left: -240px; top: 0; height: 100vh;
+      z-index: 200; transition: left 0.25s;
+    }
+    .sidebar.open { left: 0; }
+    .sidebar-backdrop {
+      display: none; position: fixed; inset: 0;
+      background: rgba(0,0,0,0.4); z-index: 199;
+    }
+    .sidebar-backdrop.show { display: block; }
+    .main-area { padding: 14px; }
+    .sidebar-toggle { display: inline-block; }
+  }
 
   header {
     background: linear-gradient(135deg, #1e3a8a 0%, #3b82f6 100%);
@@ -1014,8 +1084,38 @@ def build_html(stats, data):
 </style>
 </head>
 <body>
-<div class="container">
-  <header>
+<div class="app">
+  <!-- ============ SIDEBAR ============ -->
+  <aside class="sidebar" id="sidebar">
+    <div class="sidebar-brand">📊 amoCRM<br><span style="font-weight:400;font-size:12px;color:rgba(255,255,255,0.6)">Salohiyat Dashboard</span></div>
+    <div class="nav-section-label">Asosiy</div>
+    <div class="nav-item active" data-tab="sales">
+      <span class="nav-icon">📞</span>
+      <span>Sotuvlar</span>
+    </div>
+    <div class="nav-item" data-tab="leads">
+      <span class="nav-icon">💼</span>
+      <span>Leadlar</span>
+    </div>
+    <div class="nav-item" data-tab="marketing">
+      <span class="nav-icon">📈</span>
+      <span>Marketing</span>
+    </div>
+    <div class="nav-divider"></div>
+    <div class="nav-section-label">Yakuniy</div>
+    <div class="nav-item" data-tab="ranking">
+      <span class="nav-icon">🏆</span>
+      <span>Reyting</span>
+    </div>
+  </aside>
+  <div class="sidebar-backdrop" id="sidebarBackdrop" onclick="toggleSidebar(false)"></div>
+
+  <!-- ============ MAIN AREA ============ -->
+  <div class="main-area">
+   <div class="container">
+    <button class="sidebar-toggle" onclick="toggleSidebar(true)">☰ Menyu</button>
+
+    <header>
     <div style="display:flex;align-items:flex-start;justify-content:space-between;gap:10px;flex-wrap:wrap">
       <div style="flex:1;min-width:0">
         <h1>📊 amoCRM Dashboard — Salohiyat</h1>
@@ -1068,6 +1168,7 @@ def build_html(stats, data):
     </div>
   </div>
 
+  <section class="tab-section" data-tab="sales">
   <div class="section-title">🔹 Asosiy ko'rsatkichlar</div>
   <div class="kpi-grid">
     <div class="kpi blue">
@@ -1105,6 +1206,8 @@ def build_html(stats, data):
     </div>
   </div>
 
+  </section>
+  <section class="tab-section" data-tab="leads">
   <div class="section-title">🔹 Leadlar (Kechki guruhlar)</div>
   <div class="kpi-grid">
     <div class="kpi blue">
@@ -1163,6 +1266,8 @@ def build_html(stats, data):
     </div>
   </div>
 
+  </section>
+  <section class="tab-section" data-tab="sales">
   <div class="section-title">👤 Sotuvchi bo'yicha batafsil hisobot <span id="mgr-detail-title" style="color:#9ca3af;font-weight:500;font-size:14px"></span></div>
   <div class="kpi-grid">
     <div class="kpi blue">
@@ -1252,6 +1357,8 @@ def build_html(stats, data):
     </div>
   </div>
 
+  </section>
+  <section class="tab-section" data-tab="ranking">
   <div class="section-title">🏆 Menejerlar reytingi</div>
   <table>
     <thead>
@@ -1264,6 +1371,8 @@ def build_html(stats, data):
     <tbody id="mgr-tbody"></tbody>
   </table>
 
+  </section>
+  <section class="tab-section" data-tab="leads">
   <div class="section-title">🎯 Konversiya — Kechki guruhlar (LIVE holat)</div>
   <div class="conv-card">
     <div class="conv-summary">
@@ -1291,6 +1400,8 @@ def build_html(stats, data):
     <tbody id="site-funnel-tbody"></tbody>
   </table>
 
+  </section>
+  <section class="tab-section" data-tab="marketing">
   <!-- =================== MARKETING FUNNEL =================== -->
   <div class="section-title">📈 Marketing Funnel — Konversiyalar</div>
   <div class="filter-bar" style="margin-bottom:10px">
@@ -1363,11 +1474,14 @@ def build_html(stats, data):
 
   <!-- Pipeline breakdown table (when "Hammasi" selected) -->
   <div id="funnel-pipeline-breakdown" style="margin-top:18px"></div>
+  </section>
 
   <footer>
     📞 Salohiyat maktab · __GENERATED_AT__<br>
     Dashboard har 15 minutda avtomatik yangilanadi
   </footer>
+   </div>
+  </div>
 </div>
 
 <script>
@@ -2150,6 +2264,44 @@ $('applyBtn').addEventListener('click', applyCustom);
 
 populateManagerDropdown();
 populateFunnelPipelineDropdown();
+
+// ============================================================
+// SIDEBAR — Tab almashish
+// ============================================================
+function showTab(tabName) {
+  document.querySelectorAll('.tab-section').forEach(el => {
+    el.style.display = (el.dataset.tab === tabName) ? '' : 'none';
+  });
+  document.querySelectorAll('.nav-item').forEach(el => {
+    el.classList.toggle('active', el.dataset.tab === tabName);
+  });
+  // URL hash'da saqlaymiz — sahifa qayta ochilganda eslab qoladi
+  try { history.replaceState(null, '', '#' + tabName); } catch (e) {}
+  // Mobile: sidebar yopiladi
+  if (window.innerWidth <= 900) toggleSidebar(false);
+  // Chart'larni qayta o'lchash
+  setTimeout(() => {
+    for (const k in charts) {
+      if (charts[k] && typeof charts[k].resize === 'function') {
+        try { charts[k].resize(); } catch (e) {}
+      }
+    }
+  }, 100);
+}
+document.querySelectorAll('.nav-item[data-tab]').forEach(el => {
+  el.addEventListener('click', () => showTab(el.dataset.tab));
+});
+function toggleSidebar(open) {
+  const sb = $('sidebar'), bd = $('sidebarBackdrop');
+  if (!sb || !bd) return;
+  if (open === undefined) open = !sb.classList.contains('open');
+  sb.classList.toggle('open', open);
+  bd.classList.toggle('show', open);
+}
+// URL hash'dan dastlabki tab'ni o'qiymiz
+const initialTab = (location.hash || '#sales').slice(1);
+const validTabs = ['sales', 'leads', 'marketing', 'ranking'];
+showTab(validTabs.includes(initialTab) ? initialTab : 'sales');
 
 // ---------- Ism tahrirlash modal ----------
 function fmtSecsShort(s) {
