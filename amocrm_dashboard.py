@@ -306,17 +306,26 @@ def compute_stats(data):
     today = datetime.now().replace(hour=0, minute=0, second=0, microsecond=0)
     today_ts = int(today.timestamp())
 
+    # Helper: Moi Zvonki bilan mos "javob berilgan" mantiqi.
+    # call_status: 4=Connected (javob berilgan), 6=Missed (javobsiz), 7=qisqa hodisa.
+    # Eski ma'lumotda call_status yo'q bo'lsa, duration > 0 ga qaytamiz.
+    def _is_answered(c):
+        params = c.get("params") or {}
+        cs = params.get("call_status")
+        if cs is None:
+            return (params.get("duration", 0) or 0) > 0
+        return cs != 6
+
     # Umumiy KPI
     total_calls = len(calls)
-    answered = sum(1 for c in calls if (c.get("params") or {}).get("duration", 0) > 0)
+    answered = sum(1 for c in calls if _is_answered(c))
     missed = total_calls - answered
     answer_rate = answered / total_calls if total_calls else 0
 
     today_calls = sum(1 for c in calls if c.get("created_at", 0) >= today_ts)
     today_answered = sum(
         1 for c in calls
-        if c.get("created_at", 0) >= today_ts
-        and (c.get("params") or {}).get("duration", 0) > 0
+        if c.get("created_at", 0) >= today_ts and _is_answered(c)
     )
 
     # Yo'nalish
@@ -340,9 +349,10 @@ def compute_stats(data):
         name = user_map.get(c.get("created_by"), "Noma'lum")
         mgr_stats[name]["calls"] += 1
         dur = (c.get("params") or {}).get("duration", 0)
-        if dur > 0:
+        if _is_answered(c):
             mgr_stats[name]["answered"] += 1
-            mgr_stats[name]["duration"] += dur
+            if dur > 0:
+                mgr_stats[name]["duration"] += dur
     for l in leads:
         name = user_map.get(l.get("responsible_user_id"), "Noma'lum")
         mgr_stats[name]["leads"] += 1
@@ -404,7 +414,7 @@ def compute_stats(data):
     for c in calls:
         d = datetime.fromtimestamp(c.get("created_at", 0)).strftime("%d.%m")
         daily_calls[d]["total"] += 1
-        if (c.get("params") or {}).get("duration", 0) > 0:
+        if _is_answered(c):
             daily_calls[d]["answered"] += 1
     daily_calls_sorted = sorted(daily_calls.items(), key=lambda x: datetime.strptime(x[0], "%d.%m"))[-14:]
 
@@ -459,6 +469,7 @@ def build_html(stats, data):
             "nt": c.get("note_type", ""),
             "u": c.get("created_by"),
             "d": (c.get("params") or {}).get("duration", 0),
+            "cs": (c.get("params") or {}).get("call_status"),  # 4=javob, 6=javobsiz, 7=qisqa
         }
         for c in data["calls"]
     ]
@@ -1283,6 +1294,14 @@ function computeSiteStats(site_leads) {
   return { total, at_toshkent, sold, lost, in_progress, site_funnel };
 }
 
+// Javob berilgan qo'ng'iroqni aniqlash — Moi Zvonki bilan mos.
+// call_status: 4=Connected (javob berilgan), 6=Missed (javobsiz), 7=qisqa hodisa.
+// Eski ma'lumotda call_status yo'q bo'lsa, duration > 0 ga qaytamiz.
+function isAnswered(c) {
+  if (c.cs == null) return (c.d || 0) > 0;
+  return c.cs !== 6;
+}
+
 function computeStats(leads, calls) {
   const total_calls = calls.length;
   let answered = 0, call_in = 0, call_out = 0;
@@ -1290,13 +1309,14 @@ function computeStats(leads, calls) {
   const mgr = {};
   for (const c of calls) {
     const dur = c.d || 0;
-    if (dur > 0) { answered++; total_duration += dur; }
+    const ans = isAnswered(c);
+    if (ans) { answered++; if (dur > 0) total_duration += dur; }
     if (c.nt === 'call_in') call_in++;
     else if (c.nt === 'call_out') call_out++;
     const nm = uname(c.u);
     if (!mgr[nm]) mgr[nm] = { calls: 0, answered: 0, duration: 0, leads: 0, apr26: 0, sold: 0 };
     mgr[nm].calls++;
-    if (dur > 0) { mgr[nm].answered++; mgr[nm].duration += dur; }
+    if (ans) { mgr[nm].answered++; if (dur > 0) mgr[nm].duration += dur; }
   }
   const missed = total_calls - answered;
   const answer_rate = total_calls ? answered / total_calls : 0;
@@ -1389,10 +1409,11 @@ function computeStats(leads, calls) {
     if (!callsMap.has(key)) callsMap.set(key, { total: 0, answered: 0 });
     callsMap.get(key).total++;
     const dur = c.d || 0;
-    if (dur > 0) callsMap.get(key).answered++;
+    const ans = isAnswered(c);
+    if (ans) callsMap.get(key).answered++;
     if (!durMap.has(key)) durMap.set(key, { total_sec: 0, answered: 0 });
-    if (dur > 0) {
-      durMap.get(key).total_sec += dur;
+    if (ans) {
+      if (dur > 0) durMap.get(key).total_sec += dur;
       durMap.get(key).answered++;
     }
   }
@@ -1417,10 +1438,10 @@ function computeStats(leads, calls) {
     const dur = c.d || 0;
     if (c.nt === 'call_in') {
       hourly[h].in_tot++;
-      if (dur > 0) { hourly[h].in_ans++; hourly[h].dur_in += dur; in_answered++; }
+      if (isAnswered(c)) { hourly[h].in_ans++; if (dur > 0) hourly[h].dur_in += dur; in_answered++; }
     } else if (c.nt === 'call_out') {
       hourly[h].out_tot++;
-      if (dur > 0) { hourly[h].out_ans++; hourly[h].dur_out += dur; out_answered++; }
+      if (isAnswered(c)) { hourly[h].out_ans++; if (dur > 0) hourly[h].dur_out += dur; out_answered++; }
     }
   }
 
@@ -1800,9 +1821,9 @@ function openNameEditor() {
     const k = String(c.u);
     if (!userStats[k]) userStats[k] = { total: 0, answered: 0, dur: 0 };
     userStats[k].total += 1;
-    if ((c.d || 0) > 0) {
+    if (isAnswered(c)) {
       userStats[k].answered += 1;
-      userStats[k].dur += c.d;
+      if ((c.d || 0) > 0) userStats[k].dur += c.d;
     }
   }
   // Lead'lar bo'yicha ham (qo'ng'iroq qilmagan, lekin lead'lar bor menejer)

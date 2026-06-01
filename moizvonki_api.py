@@ -166,14 +166,18 @@ def calls_to_dashboard_format(mz_calls, email_to_user_id=None, user_map=None,
 
         # answered=0 bo'lsa duration ham 0 (javobsiz qo'ng'iroq)
         duration = c.get("duration", 0) or 0
-        if not c.get("answered"):
+        is_answered = bool(c.get("answered"))
+        if not is_answered:
             duration = 0
+        # call_status'ni Moi Zvonki'ning 'answered' field'iga moslashtiramiz
+        # (amoCRM call notes konventsiyasi: 4=Connected, 6=Missed)
+        call_status = 4 if is_answered else 6
 
         out.append({
             "created_at": c.get("start_time", 0),
             "note_type": note_type,
             "created_by": user_id,
-            "params": {"duration": duration},
+            "params": {"duration": duration, "call_status": call_status},
             # qo'shimcha — kelajakda foydali bo'lishi mumkin
             "_mz": {
                 "client": c.get("client_number"),
