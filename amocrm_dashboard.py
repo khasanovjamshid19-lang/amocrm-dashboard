@@ -39,6 +39,62 @@ DAYS_BACK_CALLS = 30
 KECHKI_PIPELINE_ID = 10554058
 APRIL_26_STATUS_ID = 84110942
 
+# ----- Marketing Funnel: target voronkalar -----
+# Bu yerga yangi voronka qo'shilsa (masalan 'test cloud'), shu listga ID qo'shing
+# YOKI quyidagi NAME_PATTERNS'ga kalit so'z qo'shing (auto-detect uchun).
+FUNNEL_PIPELINE_IDS = [
+    10705250,  # Site
+    10894014,  # Maktab shartnomasi
+    10894118,  # Imtihon + shartnoma
+    10934186,  # Site yangi
+]
+# Nomi shu kalit so'zlardan birini saqlagan voronkalar avtomatik qo'shiladi
+FUNNEL_PIPELINE_NAME_PATTERNS = ["test"]
+# Funnel uchun olingan leadlar limiti (har voronka)
+FUNNEL_LEADS_PER_PIPELINE = 5000
+
+
+def detect_funnel_stage(status_name, status_type=0):
+    """Status nomidan funnel bosqichini aniqlash (Uzbek/Russian patterns).
+    Qaytaradi: 'yangi' | 'sifatsiz' | 'bekor' | 'rozi' | 'tashrif' | 'sotuv' | 'boshqa'
+    """
+    name = (status_name or "").strip().lower()
+    # amoCRM type=1 har doim Неразобранное
+    if status_type == 1:
+        return "yangi"
+    # Yopilgan rejected statuslar
+    if "sifatsiz" in name and "test" not in name:
+        return "sifatsiz"
+    if "bekor" in name or "закрыто и не" in name:
+        return "bekor"
+    # Sotuv (yopilgan muvaffaqiyatli)
+    if name == "sotuv" or "успешно" in name or "test.sotuv" in name:
+        return "sotuv"
+    # Tashrif qildi (came/visited)
+    if "keldi" in name or "был " in name or "был на" in name:
+        return "tashrif"
+    # Rozi bo'ldi (convinced)
+    rozi_keywords = ["boraman", "kelaman", "uchrashuv belgilandi", "qabuli",
+                     "ochiq eshik", "согласился"]
+    if any(k in name for k in rozi_keywords):
+        return "rozi"
+    # Aniqlanmadi (Qayta aloqa, O'ylab ko'radi, Tavsiya etildi va h.k.)
+    return "boshqa"
+
+
+def detect_visit_reason(status_name):
+    """Status nomidan tashrif sababini aniqlash.
+    Qaytaradi: 'imtihon' | 'eshiklar' | 'shartnoma' | None
+    """
+    name = (status_name or "").lower()
+    if "imtihon" in name:
+        return "imtihon"
+    if "ochiq eshik" in name or "o.e.k" in name or " oek " in name or name.startswith("oek") or " oek" in name:
+        return "eshiklar"
+    if "shartnoma" in name:
+        return "shartnoma"
+    return None
+
 # ----- Moi Zvonki (ixtiyoriy) -----
 # Agar MOIZVONKI_API_KEY env var o'rnatilgan bo'lsa, qo'ng'iroqlar amoCRM call
 # notes o'rniga to'g'ridan-to'g'ri PBX'dan olinadi (eng aniq ma'lumot).
@@ -280,6 +336,45 @@ def fetch_all():
                 all_notes.append(n)
         print(f"     ✓ leads/notes: {len(lead_notes)}, contacts/notes: {len(contact_notes)}, jami (noyob): {len(all_notes)}")
 
+    # ----- Marketing Funnel: target voronkalarning leadlari -----
+    print("\n📈 Marketing Funnel — voronkalar yuklanmoqda...")
+    target_pipeline_ids = set(FUNNEL_PIPELINE_IDS)
+    for p in pipelines:
+        nm = (p.get("name") or "").lower()
+        if any(pat in nm for pat in FUNNEL_PIPELINE_NAME_PATTERNS):
+            target_pipeline_ids.add(p["id"])
+
+    funnel_pipelines = []
+    for p in pipelines:
+        if p["id"] not in target_pipeline_ids:
+            continue
+        p_statuses = []
+        for s in sorted(p.get("_embedded", {}).get("statuses", []), key=lambda x: x.get("sort", 0)):
+            p_statuses.append({
+                "id": s["id"],
+                "name": s.get("name", ""),
+                "sort": s.get("sort", 0),
+                "stage": detect_funnel_stage(s.get("name", ""), s.get("type", 0)),
+                "visit": detect_visit_reason(s.get("name", "")),
+            })
+        # Voronkadagi leadlarni olamiz
+        p_leads = paginate(
+            "/leads",
+            {"filter[pipeline_id]": p["id"], "order[created_at]": "desc"},
+            max_items=FUNNEL_LEADS_PER_PIPELINE,
+        )
+        funnel_pipelines.append({
+            "id": p["id"],
+            "name": p.get("name", ""),
+            "statuses": p_statuses,
+            "leads": [
+                {"s": l.get("status_id"), "u": l.get("responsible_user_id"), "t": l.get("created_at", 0)}
+                for l in p_leads
+            ],
+        })
+        print(f"     ✓ {p.get('name')!r:<30}  statuses={len(p_statuses)}  leads={len(p_leads)}")
+    print(f"     ✓ Funnel uchun {len(funnel_pipelines)} voronka tayyor")
+
     return {
         "users": users,
         "user_map": user_map,
@@ -289,6 +384,7 @@ def fetch_all():
         "site_leads": site_leads,
         "calls": all_notes,
         "calls_source": calls_source,
+        "funnel_pipelines": funnel_pipelines,
         "generated_at": datetime.now(timezone(timedelta(hours=5))).strftime("%d.%m.%Y %H:%M"),
     }
 
@@ -525,6 +621,8 @@ def build_html(stats, data):
         "qayta_aloqa_id": qayta_aloqa_id,
         "oylab_koradi_id": oylab_koradi_id,
         "days_back": DAYS_BACK_CALLS,
+        # Marketing funnel — barcha target voronkalar
+        "funnel_pipelines": data.get("funnel_pipelines", []),
     }
     data_json = json.dumps(raw_payload, ensure_ascii=False)
     generated_at = data["generated_at"]
@@ -1193,6 +1291,79 @@ def build_html(stats, data):
     <tbody id="site-funnel-tbody"></tbody>
   </table>
 
+  <!-- =================== MARKETING FUNNEL =================== -->
+  <div class="section-title">📈 Marketing Funnel — Konversiyalar</div>
+  <div class="filter-bar" style="margin-bottom:10px">
+    <span class="label">🎯 Voronka:</span>
+    <select id="funnelPipeline" style="padding:7px 10px;border:1px solid #d1d5db;border-radius:8px;font-size:14px;font-family:inherit;min-width:220px">
+      <option value="ALL">Hammasi (umumiy)</option>
+    </select>
+    <span class="label" style="margin-left:14px">🚶 Tashrif sababi:</span>
+    <select id="funnelVisitReason" style="padding:7px 10px;border:1px solid #d1d5db;border-radius:8px;font-size:14px;font-family:inherit;min-width:180px">
+      <option value="ALL">Hammasi</option>
+      <option value="imtihon">📝 Imtihon</option>
+      <option value="eshiklar">🚪 Ochiq eshiklar kuni</option>
+      <option value="shartnoma">📄 Shartnoma</option>
+    </select>
+  </div>
+
+  <!-- Funnel KPI cards -->
+  <div class="kpi-grid" id="funnel-kpi-grid">
+    <div class="kpi blue">
+      <div class="label">1️⃣ Yangi lead</div>
+      <div class="value" id="funnel-yangi">–</div>
+      <div class="sub">jami voronkaga kirgan</div>
+    </div>
+    <div class="kpi green">
+      <div class="label">2️⃣ Rozi bo'ldi</div>
+      <div class="value" id="funnel-rozi">–</div>
+      <div class="sub" id="funnel-rozi-conv">–</div>
+    </div>
+    <div class="kpi purple">
+      <div class="label">3️⃣ Tashrif qildi</div>
+      <div class="value" id="funnel-tashrif">–</div>
+      <div class="sub" id="funnel-tashrif-conv">–</div>
+    </div>
+    <div class="kpi orange">
+      <div class="label">4️⃣ Sotuv</div>
+      <div class="value" id="funnel-sotuv">–</div>
+      <div class="sub" id="funnel-sotuv-conv">–</div>
+    </div>
+    <div class="kpi" style="border-top-color:#10b981">
+      <div class="label">🎯 Umumiy konversiya</div>
+      <div class="value" id="funnel-overall" style="color:#059669">–</div>
+      <div class="sub">Yangi → Sotuv</div>
+    </div>
+  </div>
+
+  <!-- Rejection breakdown -->
+  <div class="kpi-grid" style="margin-top:14px">
+    <div class="kpi" style="border-top-color:#ef4444">
+      <div class="label">⛔ Sifatsiz lead</div>
+      <div class="value" id="funnel-sifatsiz" style="color:#dc2626">–</div>
+      <div class="sub" id="funnel-sifatsiz-pct">–</div>
+    </div>
+    <div class="kpi" style="border-top-color:#f59e0b">
+      <div class="label">🚫 Bekor qildi</div>
+      <div class="value" id="funnel-bekor" style="color:#d97706">–</div>
+      <div class="sub" id="funnel-bekor-pct">–</div>
+    </div>
+    <div class="kpi" style="border-top-color:#6b7280">
+      <div class="label">⏳ Jarayonda</div>
+      <div class="value" id="funnel-boshqa" style="color:#4b5563">–</div>
+      <div class="sub" id="funnel-boshqa-pct">Qayta aloqa / O'ylab ko'radi</div>
+    </div>
+  </div>
+
+  <!-- Funnel chart (horizontal bars) -->
+  <div style="margin-top:18px;background:#fff;border-radius:10px;padding:18px;border:1px solid #e5e7eb">
+    <h3 style="margin:0 0 16px;font-size:15px">Funnel ko'rinishi</h3>
+    <div id="funnel-bars"></div>
+  </div>
+
+  <!-- Pipeline breakdown table (when "Hammasi" selected) -->
+  <div id="funnel-pipeline-breakdown" style="margin-top:18px"></div>
+
   <footer>
     📞 Salohiyat maktab · __GENERATED_AT__<br>
     Dashboard har 15 minutda avtomatik yangilanadi
@@ -1576,8 +1747,182 @@ function render(fromTs, toTs, label) {
       <td><div class="bar" style="width:${Math.max(2, f.pct*100)}%"></div></td>
     </tr>`).join('');
 
+  // Marketing Funnel render
+  renderMarketingFunnel(fromTs, toTs);
+
   // Charts
   drawCharts(s);
+}
+
+// ============================================================
+// MARKETING FUNNEL — KONVERSIYALAR
+// ============================================================
+function computePipelineFunnel(pipeline, fromTs, toTs, visitReason) {
+  // Status ID → {stage, visit} xaritasi
+  const statusMap = {};
+  for (const s of (pipeline.statuses || [])) {
+    statusMap[s.id] = { stage: s.stage, visit: s.visit, name: s.name };
+  }
+  // Davr bo'yicha filtrlangan leadlar
+  const leads = (pipeline.leads || []).filter(l => l.t >= fromTs && l.t < toTs);
+
+  // Visit reason filter — agar tanlangan bo'lsa, statuslarda mos kelganlarni qoldiramiz
+  // Lekin "yangi" statusiga doim hisoblanadi (chunki visit reason hali aniq emas)
+  const matchesVisit = (sid) => {
+    if (visitReason === 'ALL') return true;
+    const meta = statusMap[sid];
+    if (!meta) return false;
+    // yangi/sifatsiz/bekor/boshqa-da visit reason yo'q — har doim ko'rsatamiz
+    if (['yangi', 'sifatsiz', 'bekor', 'boshqa'].includes(meta.stage)) return true;
+    return meta.visit === visitReason;
+  };
+
+  // Per-stage hisoblash
+  const stageCounts = { yangi: 0, rozi: 0, tashrif: 0, sotuv: 0, sifatsiz: 0, bekor: 0, boshqa: 0 };
+  for (const l of leads) {
+    const meta = statusMap[l.s];
+    if (!meta) continue;
+    if (!matchesVisit(l.s)) continue;
+    stageCounts[meta.stage] = (stageCounts[meta.stage] || 0) + 1;
+  }
+  // Yangi = total (BARCHA leadlar voronkaga kirgan)
+  // Rozi+ = leadlar [rozi, tashrif, sotuv] statuslarida
+  // Tashrif+ = leadlar [tashrif, sotuv] statuslarida
+  // Sotuv = leadlar [sotuv] statusida
+  const yangi_total = leads.filter(l => matchesVisit(l.s)).length;
+  const rozi_plus = stageCounts.rozi + stageCounts.tashrif + stageCounts.sotuv;
+  const tashrif_plus = stageCounts.tashrif + stageCounts.sotuv;
+  const sotuv_only = stageCounts.sotuv;
+  return {
+    pipeline_name: pipeline.name,
+    pipeline_id: pipeline.id,
+    yangi: yangi_total,
+    rozi: rozi_plus,
+    tashrif: tashrif_plus,
+    sotuv: sotuv_only,
+    sifatsiz: stageCounts.sifatsiz,
+    bekor: stageCounts.bekor,
+    boshqa: stageCounts.boshqa,  // Qayta aloqa, O'ylab ko'radi va h.k.
+  };
+}
+
+function renderMarketingFunnel(fromTs, toTs) {
+  const pipelines = RAW.funnel_pipelines || [];
+  if (pipelines.length === 0) return;
+
+  const selectedPipeline = $('funnelPipeline').value || 'ALL';
+  const visitReason = $('funnelVisitReason').value || 'ALL';
+
+  // Agar UMUMIY tanlangan bo'lsa — barcha voronkalarning yig'indisini olamiz
+  let agg;
+  if (selectedPipeline === 'ALL') {
+    agg = { yangi: 0, rozi: 0, tashrif: 0, sotuv: 0, sifatsiz: 0, bekor: 0, boshqa: 0 };
+    for (const p of pipelines) {
+      const f = computePipelineFunnel(p, fromTs, toTs, visitReason);
+      for (const k of Object.keys(agg)) agg[k] += f[k];
+    }
+  } else {
+    const p = pipelines.find(p => String(p.id) === selectedPipeline);
+    if (p) {
+      agg = computePipelineFunnel(p, fromTs, toTs, visitReason);
+    } else {
+      agg = { yangi: 0, rozi: 0, tashrif: 0, sotuv: 0, sifatsiz: 0, bekor: 0, boshqa: 0 };
+    }
+  }
+
+  // KPI cards
+  $('funnel-yangi').textContent = agg.yangi;
+  $('funnel-rozi').textContent = agg.rozi;
+  $('funnel-tashrif').textContent = agg.tashrif;
+  $('funnel-sotuv').textContent = agg.sotuv;
+
+  const pct = (a, b) => b ? ((a / b) * 100).toFixed(1) + '%' : '–';
+  $('funnel-rozi-conv').textContent = 'Konv: ' + pct(agg.rozi, agg.yangi) + ' (Yangi→Rozi)';
+  $('funnel-tashrif-conv').textContent = 'Konv: ' + pct(agg.tashrif, agg.rozi) + ' (Rozi→Tashrif)';
+  $('funnel-sotuv-conv').textContent = 'Konv: ' + pct(agg.sotuv, agg.tashrif) + ' (Tashrif→Sotuv)';
+  $('funnel-overall').textContent = pct(agg.sotuv, agg.yangi);
+
+  // Rejection breakdown — Yangi bo'yicha foiz
+  $('funnel-sifatsiz').textContent = agg.sifatsiz;
+  $('funnel-bekor').textContent = agg.bekor;
+  $('funnel-boshqa').textContent = agg.boshqa;
+  $('funnel-sifatsiz-pct').textContent = pct(agg.sifatsiz, agg.yangi) + ' (Yangi dan)';
+  $('funnel-bekor-pct').textContent = pct(agg.bekor, agg.yangi) + ' (Yangi dan)';
+  $('funnel-boshqa-pct').textContent = pct(agg.boshqa, agg.yangi) + ' (jarayonda)';
+
+  // Funnel bars (horizontal visualization)
+  const maxCount = Math.max(agg.yangi, 1);
+  const stages = [
+    { name: '1️⃣ Yangi lead',    count: agg.yangi,   color: '#3b82f6', pct: 100 },
+    { name: '2️⃣ Rozi bo’ldi', count: agg.rozi,    color: '#10b981', pct: agg.yangi ? (agg.rozi/agg.yangi)*100 : 0 },
+    { name: '3️⃣ Tashrif qildi',  count: agg.tashrif, color: '#8b5cf6', pct: agg.yangi ? (agg.tashrif/agg.yangi)*100 : 0 },
+    { name: '4️⃣ Sotuv',          count: agg.sotuv,   color: '#f59e0b', pct: agg.yangi ? (agg.sotuv/agg.yangi)*100 : 0 },
+  ];
+  $('funnel-bars').innerHTML = stages.map(st => `
+    <div style="margin-bottom:12px">
+      <div style="display:flex;justify-content:space-between;font-size:13px;margin-bottom:4px">
+        <span style="font-weight:600">${st.name}</span>
+        <span><b>${st.count}</b> · ${st.pct.toFixed(1)}%</span>
+      </div>
+      <div style="background:#f3f4f6;height:24px;border-radius:6px;overflow:hidden">
+        <div style="background:${st.color};height:100%;width:${Math.max(2, st.pct)}%;transition:width 0.4s"></div>
+      </div>
+    </div>
+  `).join('');
+
+  // Per-pipeline breakdown — faqat UMUMIY tanlanganda
+  const bd = $('funnel-pipeline-breakdown');
+  if (selectedPipeline === 'ALL' && pipelines.length > 1) {
+    const rows = pipelines.map(p => {
+      const f = computePipelineFunnel(p, fromTs, toTs, visitReason);
+      return { ...f, ovr: f.yangi ? (f.sotuv / f.yangi * 100).toFixed(1) : '–' };
+    }).filter(r => r.yangi > 0);
+    if (rows.length === 0) {
+      bd.innerHTML = '<div style="background:#fff;border-radius:10px;padding:14px;color:#9ca3af;border:1px solid #e5e7eb">Bu davrda voronkalarda lead yo‘q</div>';
+    } else {
+      bd.innerHTML = `
+        <h3 style="margin:0 0 10px;font-size:15px">Voronkalar bo'yicha taqsimot</h3>
+        <table style="background:#fff;border-radius:10px;border:1px solid #e5e7eb">
+          <thead>
+            <tr>
+              <th>Voronka</th><th>Yangi</th><th>Rozi</th><th>Tashrif</th><th>Sotuv</th>
+              <th>Sifatsiz</th><th>Bekor</th><th>Umumiy konv.</th>
+            </tr>
+          </thead>
+          <tbody>
+            ${rows.map(r => `
+              <tr>
+                <td class="name">${r.pipeline_name}</td>
+                <td>${r.yangi}</td>
+                <td>${r.rozi}</td>
+                <td>${r.tashrif}</td>
+                <td>${r.sotuv}</td>
+                <td style="color:#dc2626">${r.sifatsiz}</td>
+                <td style="color:#d97706">${r.bekor}</td>
+                <td style="font-weight:600;color:#059669">${r.ovr}${typeof r.ovr === 'string' && r.ovr !== '–' ? '%' : ''}</td>
+              </tr>`).join('')}
+          </tbody>
+        </table>`;
+    }
+  } else {
+    bd.innerHTML = '';
+  }
+}
+
+function populateFunnelPipelineDropdown() {
+  const sel = $('funnelPipeline');
+  for (const p of (RAW.funnel_pipelines || [])) {
+    const o = document.createElement('option');
+    o.value = String(p.id);
+    o.textContent = p.name;
+    sel.appendChild(o);
+  }
+  sel.addEventListener('change', () => {
+    if (lastFrom && lastTo) renderMarketingFunnel(lastFrom, lastTo);
+  });
+  $('funnelVisitReason').addEventListener('change', () => {
+    if (lastFrom && lastTo) renderMarketingFunnel(lastFrom, lastTo);
+  });
 }
 
 function drawCharts(s) {
@@ -1804,6 +2149,7 @@ document.querySelectorAll('.preset-btn').forEach(btn => {
 $('applyBtn').addEventListener('click', applyCustom);
 
 populateManagerDropdown();
+populateFunnelPipelineDropdown();
 
 // ---------- Ism tahrirlash modal ----------
 function fmtSecsShort(s) {
