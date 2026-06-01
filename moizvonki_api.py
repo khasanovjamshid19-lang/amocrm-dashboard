@@ -146,16 +146,13 @@ def calls_to_dashboard_format(mz_calls, email_to_user_id=None, user_map=None,
     out = []
     for c in mz_calls:
         direction = c.get("direction")
-        # Moi Zvonki API konventsiyasi (empirik tekshirildi):
-        #   1 = chiquvchi (исходящий, sotuvchi mijozga qo'ng'iroq qildi)
-        #   2 = kiruvchi  (входящий,   mijoz sotuvchiga qo'ng'iroq qildi)
+        # Moi Zvonki API konventsiyasi (empirik tekshirildi — UI raqamlari bilan moslashtirildi):
+        #   direction == 1  → chiquvchi (исходящий, sotuvchi → mijoz)
+        #   boshqalari (0/null/2) → kiruvchi (входящий,  mijoz → sotuvchi)
         if direction == 1:
             note_type = "call_out"
-        elif direction == 2:
-            note_type = "call_in"
         else:
-            # noma'lum — chiquvchi deb hisoblaymiz
-            note_type = "call_out"
+            note_type = "call_in"
 
         email = (c.get("user_account") or "").strip().lower()
         user_id = email_to_user_id.get(email)
