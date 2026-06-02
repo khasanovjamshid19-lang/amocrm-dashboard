@@ -344,13 +344,15 @@ def fetch_all():
         if any(pat in nm for pat in FUNNEL_PIPELINE_NAME_PATTERNS):
             target_pipeline_ids.add(p["id"])
 
-    # === Lead status o'zgarishi event'larini yig'amiz (so'nggi 90 kun) ===
+    # === Lead status o'zgarishi event'larini yig'amiz (so'nggi 30 kun, max 5000) ===
     # Maqsad: HAR lead uchun "oxirgi status o'zgarishini kim qildi" — bu eng to'g'ri
     # "sotuvchi" attributi (responsible_user yoki updated_by'dan ko'ra aniqroq).
-    # Try/except — agar /events xatosi bo'lsa, skript crash bo'lmaydi, fallback ishlaydi
-    print("📅  Status o'zgarish event'larini yuklamoqda...")
-    events_start = end_ts - 90 * 86400
+    # OPTIMIZATSIYA: avval 90 kun + 30k item edi — Action'ni timeout qildiradi.
+    # Endi 30 kun + 5k item. Try/except — xato bo'lsa fallback ishlaydi.
+    print("📅  Status o'zgarish event'larini yuklamoqda (30 kun)...")
+    events_start = end_ts - 30 * 86400
     last_actor_by_lead = {}
+    ev_start_t = time.time()
     try:
         status_events = paginate(
             "/events",
@@ -359,7 +361,7 @@ def fetch_all():
                 "filter[created_at][from]": events_start,
                 "filter[created_at][to]": end_ts,
             },
-            max_items=30000,
+            max_items=5000,
         )
         # entity_id (lead_id) → (max_created_at, created_by)
         for ev in status_events:
@@ -375,7 +377,7 @@ def fetch_all():
             prev = last_actor_by_lead.get(eid)
             if prev is None or at > prev[0]:
                 last_actor_by_lead[eid] = (at, by)
-        print(f"     ✓ {len(status_events)} event,  unikal lead: {len(last_actor_by_lead)}")
+        print(f"     ✓ {len(status_events)} event, unikal lead: {len(last_actor_by_lead)}, vaqt: {time.time()-ev_start_t:.1f}s")
     except Exception as e:
         print(f"     ⚠ /events xatosi: {e}")
         print(f"     ➜ updated_by → responsible_user_id fallback'ga o'tamiz")
