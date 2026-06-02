@@ -2528,13 +2528,80 @@ $('nameEditOverlay').addEventListener('click', (e) => {
 });
 
 // Manual yangilash tugmasi (header'da)
-const _hardRefreshBtn = document.getElementById('hardRefreshBtn');
-if (_hardRefreshBtn) {
-  _hardRefreshBtn.addEventListener('click', function () {
+// "Yangilash" tugmasi — GitHub Action'ni ishga tushiradi (agar REFRESH_TOKEN sozlangan bo'lsa).
+// Aks holda — oddiy kesh tozalovchi reload.
+const REFRESH_TOKEN = "__REFRESH_TOKEN__";
+const GITHUB_OWNER = "khasanovjamshid19-lang";
+const GITHUB_REPO = "amocrm-dashboard";
+const WORKFLOW_FILE = "refresh.yml";
+
+async function triggerGitHubRefresh() {
+  const btn = document.getElementById('hardRefreshBtn');
+  if (!REFRESH_TOKEN || REFRESH_TOKEN.startsWith("__")) {
+    // Token sozlanmagan — oddiy cache-bust reload
     const url = new URL(window.location.href);
     url.searchParams.set('v', Date.now());
     window.location.replace(url.toString());
-  });
+    return;
+  }
+  // Rate limit: 60 soniyada 1 marta
+  const last = parseInt(localStorage.getItem('lastGhRefresh') || '0', 10);
+  if (Date.now() - last < 60000) {
+    const sec = Math.ceil((60000 - (Date.now() - last)) / 1000);
+    alert("⏳ Iltimos, " + sec + " soniyadan keyin urinib ko'ring.\n(Tez-tez bosish GitHub limitini buzadi)");
+    return;
+  }
+  if (!confirm("🔄 GitHub'dan eng yangi ma'lumotlarni yuklab olish?\n\nBu 3-5 daqiqa vaqt oladi.\nSahifa avtomatik yangilanadi.")) return;
+
+  // UI feedback
+  const originalText = btn.textContent;
+  btn.disabled = true;
+  btn.textContent = "⏳ Yuborilmoqda...";
+  try {
+    const resp = await fetch(
+      `https://api.github.com/repos/${GITHUB_OWNER}/${GITHUB_REPO}/actions/workflows/${WORKFLOW_FILE}/dispatches`,
+      {
+        method: 'POST',
+        headers: {
+          'Authorization': 'token ' + REFRESH_TOKEN,
+          'Accept': 'application/vnd.github+json',
+          'X-GitHub-Api-Version': '2022-11-28',
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ ref: 'main' }),
+      }
+    );
+    if (resp.status === 204) {
+      localStorage.setItem('lastGhRefresh', String(Date.now()));
+      btn.textContent = "✅ Yuborildi! 4 daq kuting...";
+      // 4 daqiqadan keyin avtomatik refresh
+      let secondsLeft = 240;
+      const tick = setInterval(() => {
+        secondsLeft--;
+        btn.textContent = "⏳ " + secondsLeft + "s · keyin yangilanadi";
+        if (secondsLeft <= 0) {
+          clearInterval(tick);
+          const url = new URL(window.location.href);
+          url.searchParams.set('v', Date.now());
+          window.location.replace(url.toString());
+        }
+      }, 1000);
+    } else {
+      const text = await resp.text();
+      alert("❌ GitHub xatosi (" + resp.status + "):\n" + text.slice(0, 300));
+      btn.disabled = false;
+      btn.textContent = originalText;
+    }
+  } catch (e) {
+    alert("❌ Tarmoq xatosi: " + e.message);
+    btn.disabled = false;
+    btn.textContent = originalText;
+  }
+}
+
+const _hardRefreshBtn = document.getElementById('hardRefreshBtn');
+if (_hardRefreshBtn) {
+  _hardRefreshBtn.addEventListener('click', triggerGitHubRefresh);
 }
 
 // Dastlabki render — oxirgi 30 kun
@@ -2597,10 +2664,14 @@ setInterval(checkDataFreshness, 60 * 1000);
         "amocrm_fallback": "amoCRM (zaxira — Moi Zvonki ishlamadi)",
     }.get(calls_source, calls_source)
 
+    # Refresh token — GitHub Action ni "Yangilash" tugmasi orqali ishga tushirish uchun
+    # REFRESH_TOKEN secret bo'lsa ishlatamiz, bo'lmasa bo'sh qoldiramiz (button fallback)
+    refresh_token = os.environ.get("REFRESH_TOKEN", "").strip()
     html = (html_template
             .replace("__GENERATED_AT__", generated_at)
             .replace("__DAYS_BACK__", str(DAYS_BACK_CALLS))
             .replace("__CALLS_SOURCE__", source_label)
+            .replace("__REFRESH_TOKEN__", refresh_token)
             .replace("__DATA_JSON__", data_json))
     return html
 
