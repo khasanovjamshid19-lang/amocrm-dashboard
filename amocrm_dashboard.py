@@ -2548,10 +2548,10 @@ async function triggerGitHubRefresh() {
   const last = parseInt(localStorage.getItem('lastGhRefresh') || '0', 10);
   if (Date.now() - last < 60000) {
     const sec = Math.ceil((60000 - (Date.now() - last)) / 1000);
-    alert("⏳ Iltimos, " + sec + " soniyadan keyin urinib ko'ring.\n(Tez-tez bosish GitHub limitini buzadi)");
+    alert("⏳ Iltimos, " + sec + " soniyadan keyin urinib ko'ring. (Tez-tez bosish GitHub limitini buzadi)");
     return;
   }
-  if (!confirm("🔄 GitHub'dan eng yangi ma'lumotlarni yuklab olish?\n\nBu 3-5 daqiqa vaqt oladi.\nSahifa avtomatik yangilanadi.")) return;
+  if (!confirm("🔄 GitHub'dan eng yangi ma'lumotlarni yuklab olish? Bu 3-5 daqiqa vaqt oladi. Sahifa avtomatik yangilanadi.")) return;
 
   // UI feedback
   const originalText = btn.textContent;
@@ -2588,7 +2588,7 @@ async function triggerGitHubRefresh() {
       }, 1000);
     } else {
       const text = await resp.text();
-      alert("❌ GitHub xatosi (" + resp.status + "):\n" + text.slice(0, 300));
+      alert("❌ GitHub xatosi (" + resp.status + "): " + text.slice(0, 300));
       btn.disabled = false;
       btn.textContent = originalText;
     }
