@@ -89,6 +89,17 @@ FUNNEL_YANGI_MODE = {
     # Boshqa voronkalar: default "total"
 }
 
+# ===== Pipeline ROLE (cross-pipeline funnel uchun) =====
+# "source"     — Lead manbai (Yangi sanalish kerak). Dropdown'da ko'rinadi.
+# "downstream" — Lead manbai EMAS, lekin Rozi/Tashrif/Sotuv bosqichlari shu yerda.
+#                Dropdown'da YASHIRIN. Stage'larini cross-pipeline jamoaga qo'shadi.
+FUNNEL_PIPELINE_ROLES = {
+    10705250: "source",      # Site
+    10934186: "source",      # Site yangi
+    10894118: "downstream",  # Imtihon + shartnoma (Rozi/Tashrif/Sotuv shu yerda)
+    10894014: "downstream",  # Maktab shartnomasi (ehtimol downstream)
+}
+
 
 def detect_funnel_stage(status_name, status_type=0, status_id=None):
     """Status'dan funnel bosqichini aniqlash.
@@ -485,6 +496,7 @@ def fetch_all():
             "id": p["id"],
             "name": p.get("name", ""),
             "yangi_mode": FUNNEL_YANGI_MODE.get(p["id"], "total"),  # default: total
+            "role": FUNNEL_PIPELINE_ROLES.get(p["id"], "source"),   # default: source (ko'rsatadi)
             "statuses": p_statuses,
             "leads": [
                 {
@@ -1581,7 +1593,7 @@ def build_html(stats, data):
       • ⏱ Har 1 daqiqa gaplashish: <b>+1 ball</b><br>
       • 🤝 Rozi bo'ldi (Boraman dedi / Qabulga keldi): <b>15 ball</b><br>
       • 🎓 Keldi (Tavsiya etildi / Tavsiya etilmadi): <b>30 ball</b><br>
-      • 💰 Sotuv: <b>100 ball</b>
+      <span style="color:#9ca3af;font-size:12px">💰 Sotuv soni ko'rsatiladi (statistika sifatida), lekin ball bermaydi.</span>
     </div>
   </div>
 
@@ -1711,6 +1723,30 @@ def build_html(stats, data):
   <div style="margin-top:18px;background:#fff;border-radius:10px;padding:18px;border:1px solid #e5e7eb">
     <h3 style="margin:0 0 16px;font-size:15px">Funnel ko'rinishi</h3>
     <div id="funnel-bars"></div>
+  </div>
+
+  <!-- Optional Konversiya Kalkulyator -->
+  <div class="section-title" style="margin-top:24px">🧮 Konversiya kalkulyator (ixtiyoriy)</div>
+  <div style="background:#fff;border-radius:12px;padding:18px;border:1px solid #e5e7eb">
+    <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap;margin-bottom:14px">
+      <span style="font-weight:600;color:#374151">Bosqichdan</span>
+      <select id="convFrom" style="padding:7px 10px;border:1px solid #d1d5db;border-radius:8px;font-size:14px;font-family:inherit;min-width:140px">
+        <option value="yangi" selected>1️⃣ Yangi lead</option>
+        <option value="rozi">2️⃣ Rozi bo'ldi</option>
+        <option value="tashrif">3️⃣ Keldi (Tashrif)</option>
+      </select>
+      <span style="font-weight:600;color:#374151">bosqichgacha</span>
+      <select id="convTo" style="padding:7px 10px;border:1px solid #d1d5db;border-radius:8px;font-size:14px;font-family:inherit;min-width:140px">
+        <option value="rozi">2️⃣ Rozi bo'ldi</option>
+        <option value="tashrif" selected>3️⃣ Keldi (Tashrif)</option>
+        <option value="sotuv">4️⃣ Sotuv</option>
+      </select>
+    </div>
+    <div id="conv-calc-result" style="background:#f0f9ff;border:1px solid #bae6fd;border-radius:10px;padding:18px;text-align:center">
+      <div style="font-size:13px;color:#0c4a6e;margin-bottom:6px" id="conv-calc-label">—</div>
+      <div style="font-size:32px;font-weight:800;color:#0369a1" id="conv-calc-pct">—</div>
+      <div style="font-size:12px;color:#64748b;margin-top:6px" id="conv-calc-detail">—</div>
+    </div>
   </div>
 
   <!-- Pipeline breakdown table (when "Hammasi" selected) -->
@@ -2181,21 +2217,35 @@ function renderMarketingFunnel(fromTs, toTs) {
   const visitReason = $('funnelVisitReason').value || 'ALL';
   const managerFilter = $('funnelManager').value || 'ALL';
 
-  // Agar UMUMIY tanlangan bo'lsa — barcha voronkalarning yig'indisini olamiz
-  let agg;
+  // ── CROSS-PIPELINE MANTIQ ──
+  // Yangi/Sifatsiz/Bekor/Boshqa = SOURCE pipeline(lar)dan
+  // Rozi/Tashrif/Sotuv         = DOWNSTREAM pipeline(lar)dan (har doim, doimo)
+  // Bu user-ning ish jarayoniga mos:
+  //   Site/Site yangi → Imtihon+shartnoma (Rozi=Boraman dedi, Tashrif=Tavsiya etildi, Sotuv=Sotuv)
+
+  let sourcePipelines = [];
   if (selectedPipeline === 'ALL') {
-    agg = { yangi: 0, rozi: 0, tashrif: 0, sotuv: 0, sifatsiz: 0, bekor: 0, boshqa: 0 };
-    for (const p of pipelines) {
-      const f = computePipelineFunnel(p, fromTs, toTs, visitReason, managerFilter);
-      for (const k of Object.keys(agg)) agg[k] += f[k];
-    }
+    sourcePipelines = pipelines.filter(p => p.role === 'source');
   } else {
-    const p = pipelines.find(p => String(p.id) === selectedPipeline);
-    if (p) {
-      agg = computePipelineFunnel(p, fromTs, toTs, visitReason, managerFilter);
-    } else {
-      agg = { yangi: 0, rozi: 0, tashrif: 0, sotuv: 0, sifatsiz: 0, bekor: 0, boshqa: 0 };
-    }
+    sourcePipelines = pipelines.filter(p => String(p.id) === selectedPipeline && p.role === 'source');
+  }
+  const downstreamPipelines = pipelines.filter(p => p.role === 'downstream');
+
+  // Source'lardan yangi/rejection/intermediate hisoblanadi
+  const agg = { yangi: 0, rozi: 0, tashrif: 0, sotuv: 0, sifatsiz: 0, bekor: 0, boshqa: 0 };
+  for (const p of sourcePipelines) {
+    const f = computePipelineFunnel(p, fromTs, toTs, visitReason, managerFilter);
+    agg.yangi += f.yangi;
+    agg.sifatsiz += f.sifatsiz;
+    agg.bekor += f.bekor;
+    agg.boshqa += f.boshqa;
+  }
+  // Downstream'lardan rozi/tashrif/sotuv hisoblanadi (cross-pipeline)
+  for (const p of downstreamPipelines) {
+    const f = computePipelineFunnel(p, fromTs, toTs, visitReason, managerFilter);
+    agg.rozi += f.rozi;
+    agg.tashrif += f.tashrif;
+    agg.sotuv += f.sotuv;
   }
 
   // KPI cards
@@ -2237,6 +2287,19 @@ function renderMarketingFunnel(fromTs, toTs) {
       </div>
     </div>
   `).join('');
+
+  // ── Konversiya kalkulyator (ixtiyoriy) ──
+  // Sotuvchi tanlagan 2 bosqich orasidagi konversiyani ko'rsatamiz
+  const stageVals = { yangi: agg.yangi, rozi: agg.rozi, tashrif: agg.tashrif, sotuv: agg.sotuv };
+  const stageLabels = { yangi: '1️⃣ Yangi lead', rozi: '2️⃣ Rozi bo‘ldi', tashrif: '3️⃣ Keldi (Tashrif)', sotuv: '4️⃣ Sotuv' };
+  const convFrom = ($('convFrom') && $('convFrom').value) || 'yangi';
+  const convTo = ($('convTo') && $('convTo').value) || 'tashrif';
+  const fromVal = stageVals[convFrom] || 0;
+  const toVal = stageVals[convTo] || 0;
+  const convPct = fromVal > 0 ? ((toVal / fromVal) * 100).toFixed(1) + '%' : '—';
+  if ($('conv-calc-label')) $('conv-calc-label').textContent = stageLabels[convFrom] + ' → ' + stageLabels[convTo];
+  if ($('conv-calc-pct'))   $('conv-calc-pct').textContent = convPct;
+  if ($('conv-calc-detail')) $('conv-calc-detail').textContent = toVal + ' / ' + fromVal + ' ta lead';
 
   // Per-pipeline breakdown — faqat UMUMIY tanlanganda
   const bd = $('funnel-pipeline-breakdown');
@@ -2280,6 +2343,9 @@ function renderMarketingFunnel(fromTs, toTs) {
 function populateFunnelPipelineDropdown() {
   const sel = $('funnelPipeline');
   for (const p of (RAW.funnel_pipelines || [])) {
+    // "downstream" pipeline'lar yashirin — ular Hammasi yoki Site/Site yangi
+    // tanlangan bo'lganda Rozi/Tashrif/Sotuv stage'larini hisoblaydi (cross-pipeline)
+    if (p.role === 'downstream') continue;
     const o = document.createElement('option');
     o.value = String(p.id);
     o.textContent = p.name;
@@ -2295,6 +2361,17 @@ function populateFunnelPipelineDropdown() {
   $('funnelManager').addEventListener('change', () => {
     if (lastFrom && lastTo) renderMarketingFunnel(lastFrom, lastTo);
   });
+  // Konversiya kalkulyator dropdown'lari
+  if ($('convFrom')) {
+    $('convFrom').addEventListener('change', () => {
+      if (lastFrom && lastTo) renderMarketingFunnel(lastFrom, lastTo);
+    });
+  }
+  if ($('convTo')) {
+    $('convTo').addEventListener('change', () => {
+      if (lastFrom && lastTo) renderMarketingFunnel(lastFrom, lastTo);
+    });
+  }
   // Dastlabki sotuvchilar ro'yxatini chiqaramiz
   populateFunnelManagerDropdown();
 }
@@ -2309,8 +2386,9 @@ const GAMI_POINTS = {
   minute: 1,       // har 1 daqiqa gaplashish
   rozi: 15,        // rozi bo'ldi (boraman dedi / Qabulga keldi)
   tashrif: 30,     // tashrif qildi (Tavsiya etildi / etilmadi)
-  sotuv: 100,      // sotuv
-  // yangi_lead ball user qarori bilan olib tashlandi (faqat konversiyalar uchun ball)
+  // sotuv (100 ball) — user qarori bilan olib tashlandi.
+  //   Sotuv soni leaderboard'da hali ham ko'rsatiladi (statistika), lekin ball bermaydi.
+  // yangi_lead (5 ball) — ham olib tashlandi.
 };
 
 function computeGamification(fromTs, toTs) {
@@ -2372,8 +2450,8 @@ function computeGamification(fromTs, toTs) {
       s.answered * GAMI_POINTS.answered +
       minutes * GAMI_POINTS.minute +
       s.rozi * GAMI_POINTS.rozi +
-      s.tashrif * GAMI_POINTS.tashrif +
-      s.sotuv * GAMI_POINTS.sotuv
+      s.tashrif * GAMI_POINTS.tashrif
+      // sotuv ball'i olib tashlandi — lekin s.sotuv qiymati saqlanadi (jadval uchun)
     );
     s.dur_min = +(minutes.toFixed(1));
   }
