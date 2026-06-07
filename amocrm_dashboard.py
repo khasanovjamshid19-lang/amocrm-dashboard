@@ -129,6 +129,16 @@ MOIZVONKI_NAME_OVERRIDES = {
     "tulkinovabduvohid12@gmail.com": "Ruslan",
 }
 
+# ===== USER ID → ISM (Server-side override, hamma qurilmada bir xil) =====
+# Bu ID'lar dashboard'da SHU ismlar bilan ko'rinadi (har kim qaytadan rename
+# qilmasdan). LocalStorage rename ham bu ustidan ishlaydi (individual override).
+USER_NAME_OVERRIDES_BY_ID = {
+    11580030: "Umar",       # amoCRM: Admin
+    11593910: "Ruslan",     # amoCRM: Sotuv manager (Ruslan)
+    13743574: "Abdulaziz",  # amoCRM: Abdulaziz (asl)
+    # Boshqa ID'lar — kerak bo'lsa qo'shing
+}
+
 # Site voronka (Toshkent leadlari)
 SITE_PIPELINE_ID = 10705250
 SITE_TOSHKENT_STATUS_ID = 84347286          # 'Toshkent' statusi
@@ -208,6 +218,15 @@ def fetch_all():
         em = (u.get("email") or "").strip().lower()
         if em:
             email_to_user_id[em] = u["id"]
+    # USER_NAME_OVERRIDES_BY_ID — server tomon override (hamma qurilmada bir xil)
+    applied = 0
+    for uid, override_name in USER_NAME_OVERRIDES_BY_ID.items():
+        if uid in user_map and user_map[uid] != override_name:
+            print(f"     ↻ override: id={uid}  {user_map[uid]!r} → {override_name!r}")
+            user_map[uid] = override_name
+            applied += 1
+    if applied:
+        print(f"     ✓ {applied} ta ism override qilindi (server-side)")
     print(f"     ✓ {len(users)} user")
 
     print("2/4  Pipelines yuklanmoqda...")
