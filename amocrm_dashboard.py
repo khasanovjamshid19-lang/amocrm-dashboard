@@ -2223,36 +2223,65 @@ function renderMarketingFunnel(fromTs, toTs) {
   const visitReason = $('funnelVisitReason').value || 'ALL';
   const managerFilter = $('funnelManager').value || 'ALL';
 
-  // ── CROSS-PIPELINE MANTIQ ──
-  // Yangi/Sifatsiz/Bekor/Boshqa = SOURCE pipeline(lar)dan
-  // Rozi/Tashrif/Sotuv         = DOWNSTREAM pipeline(lar)dan (har doim, doimo)
-  // Bu user-ning ish jarayoniga mos:
-  //   Site/Site yangi → Imtihon+shartnoma (Rozi=Boraman dedi, Tashrif=Tavsiya etildi, Sotuv=Sotuv)
+  // ── PER-LEAD HISOBLASH (cross-pipeline math'i to'g'ri ishlashi uchun) ──
+  // Bitta lead — bitta status — bitta stage. Source + downstream voronkalarni
+  // iteratsiya qilamiz, har leadni faqat 1 marta sanaymiz.
+  //  Yangi = jami sanalgan (sum of stages)
+  //  Sifatsiz + Bekor + Jarayonda + Rozi(cumulative) = Yangi ✅
 
-  let sourcePipelines = [];
+  // Qaysi voronkalarni hisobga olamiz
+  let includedPipelines;
   if (selectedPipeline === 'ALL') {
-    sourcePipelines = pipelines.filter(p => p.role === 'source');
+    // Hammasi: barcha source + barcha downstream
+    includedPipelines = pipelines.filter(p => p.role === 'source' || p.role === 'downstream');
   } else {
-    sourcePipelines = pipelines.filter(p => String(p.id) === selectedPipeline && p.role === 'source');
+    // Individual source tanlangan: o'sha source + barcha downstream (cross-pipeline)
+    const src = pipelines.filter(p => String(p.id) === selectedPipeline);
+    const dst = pipelines.filter(p => p.role === 'downstream');
+    includedPipelines = src.concat(dst);
   }
-  const downstreamPipelines = pipelines.filter(p => p.role === 'downstream');
 
-  // Source'lardan yangi/rejection/intermediate hisoblanadi
-  const agg = { yangi: 0, rozi: 0, tashrif: 0, sotuv: 0, sifatsiz: 0, bekor: 0, boshqa: 0 };
-  for (const p of sourcePipelines) {
-    const f = computePipelineFunnel(p, fromTs, toTs, visitReason, managerFilter);
-    agg.yangi += f.yangi;
-    agg.sifatsiz += f.sifatsiz;
-    agg.bekor += f.bekor;
-    agg.boshqa += f.boshqa;
+  function _matchesVisit(meta) {
+    if (visitReason === 'ALL') return true;
+    if (['yangi', 'sifatsiz', 'bekor', 'boshqa'].includes(meta.stage)) return true;
+    return meta.visit === visitReason;
   }
-  // Downstream'lardan rozi/tashrif/sotuv hisoblanadi (cross-pipeline)
-  for (const p of downstreamPipelines) {
-    const f = computePipelineFunnel(p, fromTs, toTs, visitReason, managerFilter);
-    agg.rozi += f.rozi;
-    agg.tashrif += f.tashrif;
-    agg.sotuv += f.sotuv;
+
+  const stageCounts = { yangi: 0, rozi: 0, tashrif: 0, sotuv: 0, sifatsiz: 0, bekor: 0, boshqa: 0 };
+  let totalCounted = 0;
+
+  for (const p of includedPipelines) {
+    const statusMap = {};
+    for (const s of (p.statuses || [])) statusMap[s.id] = s;
+
+    for (const l of (p.leads || [])) {
+      if (l.t < fromTs || l.t >= toTs) continue;
+      if (managerFilter && managerFilter !== 'ALL') {
+        const actor = l.lu != null ? l.lu : l.u;
+        if (uname(actor) !== managerFilter) continue;
+      }
+      const meta = statusMap[l.s];
+      if (!meta) continue;
+      if (meta.stage === 'exclude') continue;   // pre-funnel, hisoblanmaydi
+      if (!_matchesVisit(meta)) continue;
+
+      stageCounts[meta.stage] = (stageCounts[meta.stage] || 0) + 1;
+      totalCounted++;
+    }
   }
+
+  // Agg — KPI cards uchun
+  // Yangi = jami sanalgan leadlar (mutually-exclusive stagelarning yig'indisi)
+  // Jarayonda = boshqa + yangi_stage (yangi stage'dagi leadlar ham hali "jarayonda")
+  const agg = {
+    yangi: totalCounted,
+    rozi: stageCounts.rozi + stageCounts.tashrif + stageCounts.sotuv,
+    tashrif: stageCounts.tashrif + stageCounts.sotuv,
+    sotuv: stageCounts.sotuv,
+    sifatsiz: stageCounts.sifatsiz,
+    bekor: stageCounts.bekor,
+    boshqa: stageCounts.boshqa + stageCounts.yangi,  // yangi stage ham jarayonda
+  };
 
   // KPI cards
   $('funnel-yangi').textContent = agg.yangi;
