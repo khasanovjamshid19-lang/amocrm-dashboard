@@ -61,6 +61,23 @@ STATUS_STAGE_OVERRIDES = {
     84347282: "boshqa",    # Неразобранное (Facebook raw, hali saralanmagan)
     85256062: "yangi",     # Toshkent lead ← YANGI funnel boshi
     86214338: "sifatsiz",  # boshqa viloyat (Toshkent emas → rad etiladi)
+
+    # ─── Imtihon + shartnoma (10894118) ───
+    # Foydalanuvchining "umumiy voronka" mantiqi:
+    #   Site/Site yangi → I+sh "Boraman dedi (Imtihon) / Qabulga keldi" = ROZI
+    #   I+sh "Tavsiya etildi / Tavsiya etilmadi" = TASHRIF (keldi)
+    #   I+sh "Sotuv" = SOTUV
+    85700194: "rozi",      # Boraman dedi (Imtihon)  ← 15 ball
+    85699398: "rozi",      # O.E.K ga keldi / Qabulga keldi  ← 15 ball
+    85700202: "tashrif",   # Tavsiya etildi  ← 30 ball
+    85700206: "tashrif",   # Tavsiya etilmadi + qayta imtihon  ← 30 ball
+    # 85926922 (Sotuv) — auto-detect (nom 'sotuv')
+    # 85707570 (Bekor qildi) — auto-detect
+    # 85699394 (Неразобранное) — auto type=1 → yangi
+    85699406: "boshqa",    # O'ylab KO'radi (imtihon) — jarayonda
+    86183922: "boshqa",    # O'ylab ko'radi (shartnoma) — jarayonda
+    85926958: "boshqa",    # boraman dedi (shartnoma) — user faqat (imtihon) ni rozi sanaydi
+    85699402: "boshqa",    # Qayta aloqa
 }
 
 # ===== Per-pipeline "Yangi" qanday hisoblanadi =====
@@ -806,6 +823,90 @@ def build_html(stats, data):
   .tab-pane { display: none; }
   .tab-pane.active { display: block; }
 
+  /* ===== GAMIFICATION ===== */
+  .podium-card {
+    background: #fff; border-radius: 16px; padding: 20px;
+    text-align: center; box-shadow: 0 4px 16px rgba(0,0,0,0.08);
+    border: 2px solid transparent; transition: transform 0.2s;
+    min-width: 200px; flex: 0 1 240px;
+  }
+  .podium-card:hover { transform: translateY(-4px); }
+  .podium-1 {
+    border-color: #fbbf24; height: 280px;
+    background: linear-gradient(180deg, #fffbeb 0%, #fef3c7 100%);
+  }
+  .podium-2 {
+    border-color: #d1d5db; height: 240px;
+    background: linear-gradient(180deg, #f9fafb 0%, #f3f4f6 100%);
+  }
+  .podium-3 {
+    border-color: #fb923c; height: 220px;
+    background: linear-gradient(180deg, #fff7ed 0%, #ffedd5 100%);
+  }
+  .podium-medal { font-size: 52px; line-height: 1; margin-bottom: 8px; }
+  .podium-name { font-size: 17px; font-weight: 700; color: #111827; margin: 4px 0; }
+  .podium-points {
+    font-size: 32px; font-weight: 800; margin: 8px 0;
+    background: linear-gradient(135deg, #3b82f6, #10b981);
+    -webkit-background-clip: text; -webkit-text-fill-color: transparent;
+  }
+  .podium-1 .podium-points {
+    background: linear-gradient(135deg, #f59e0b, #d97706);
+    -webkit-background-clip: text; -webkit-text-fill-color: transparent;
+  }
+  .podium-breakdown { font-size: 11px; color: #6b7280; line-height: 1.6; margin-top: 8px; }
+
+  .gami-card {
+    background: #fff; border-radius: 12px; padding: 16px;
+    border: 1px solid #e5e7eb; box-shadow: 0 1px 3px rgba(0,0,0,0.04);
+  }
+  .gami-card-head {
+    display: flex; align-items: center; justify-content: space-between;
+    margin-bottom: 10px; padding-bottom: 10px; border-bottom: 1px solid #f3f4f6;
+  }
+  .gami-rank {
+    width: 32px; height: 32px; border-radius: 50%;
+    background: #e0e7ff; color: #3730a3; font-weight: 700;
+    display: flex; align-items: center; justify-content: center; font-size: 14px;
+  }
+  .gami-name { font-weight: 700; font-size: 15px; flex: 1; margin: 0 10px; color: #111827; }
+  .gami-pts {
+    background: linear-gradient(135deg, #3b82f6, #10b981); color: white;
+    padding: 4px 10px; border-radius: 8px; font-weight: 700; font-size: 14px;
+  }
+  .gami-metrics {
+    display: grid; grid-template-columns: repeat(2, 1fr); gap: 6px 12px;
+    font-size: 12px; color: #4b5563;
+  }
+  .gami-metric { display: flex; justify-content: space-between; }
+  .gami-metric b { color: #111827; }
+
+  .achievement-row {
+    display: flex; align-items: center; padding: 10px 0;
+    border-bottom: 1px solid #f3f4f6;
+  }
+  .achievement-row:last-child { border-bottom: none; }
+  .achievement-name {
+    font-weight: 600; font-size: 14px; min-width: 130px; color: #111827;
+  }
+  .achievement-badges { display: flex; flex-wrap: wrap; gap: 6px; flex: 1; }
+  .achievement-badge {
+    display: inline-flex; align-items: center; gap: 4px;
+    background: #f3f4f6; padding: 4px 10px; border-radius: 14px;
+    font-size: 12px; color: #374151; font-weight: 500;
+    border: 1px solid #e5e7eb;
+  }
+  .achievement-badge.gold { background: linear-gradient(135deg, #fef3c7, #fde68a); border-color: #f59e0b; color: #78350f; }
+  .achievement-badge.silver { background: linear-gradient(135deg, #f3f4f6, #e5e7eb); border-color: #9ca3af; color: #1f2937; }
+  .achievement-badge.bronze { background: linear-gradient(135deg, #ffedd5, #fed7aa); border-color: #fb923c; color: #7c2d12; }
+  .achievement-badge.red { background: linear-gradient(135deg, #fee2e2, #fecaca); border-color: #ef4444; color: #7f1d1d; }
+  .achievement-empty { color: #9ca3af; font-size: 12px; font-style: italic; }
+
+  @media (max-width: 640px) {
+    .podium-card { min-width: auto; width: 100%; height: auto !important; }
+    #gami-podium { flex-direction: column; align-items: stretch; }
+  }
+
   /* Mobile sidebar */
   .sidebar-toggle {
     display: none;
@@ -1467,7 +1568,35 @@ def build_html(stats, data):
 
   </section>
   <section class="tab-section" data-tab="ranking">
-  <div class="section-title">🏆 Menejerlar reytingi</div>
+
+  <!-- =================== GAMIFICATION =================== -->
+  <div class="section-title">🏆 Gamification — Top Sotuvchilar <span id="gami-period" style="color:#9ca3af;font-weight:500;font-size:14px"></span></div>
+
+  <!-- Ball formula info -->
+  <div class="gami-formula" id="gami-formula-toggle" style="background:#f0f9ff;border:1px solid #bae6fd;border-radius:10px;padding:12px 16px;margin-bottom:14px;cursor:pointer;font-size:13px;color:#0c4a6e">
+    💡 <b>Ball qanday hisoblanadi?</b> Bosing — formulani ko'rasiz
+    <div id="gami-formula-detail" style="display:none;margin-top:10px;line-height:1.7">
+      • 📞 Qo'ng'iroq: <b>1 ball</b><br>
+      • ✅ Javob berilgan (bonus): <b>+2 ball</b><br>
+      • ⏱ Har 1 daqiqa gaplashish: <b>+1 ball</b><br>
+      • 🤝 Rozi bo'ldi (Boraman dedi / Qabulga keldi): <b>15 ball</b><br>
+      • 🎓 Keldi (Tavsiya etildi / Tavsiya etilmadi): <b>30 ball</b><br>
+      • 💰 Sotuv: <b>100 ball</b>
+    </div>
+  </div>
+
+  <!-- Podium (top 3) -->
+  <div id="gami-podium" style="display:flex;gap:14px;justify-content:center;align-items:flex-end;margin:24px 0;flex-wrap:wrap"></div>
+
+  <!-- Leaderboard cards (all sales) -->
+  <div id="gami-leaderboard" style="display:grid;grid-template-columns:repeat(auto-fit,minmax(280px,1fr));gap:14px;margin:18px 0"></div>
+
+  <!-- Achievements wall -->
+  <div class="section-title" style="margin-top:24px">🎖 Achievementlar (medal'lar)</div>
+  <div id="gami-achievements" style="background:#fff;border-radius:12px;padding:16px;border:1px solid #e5e7eb"></div>
+
+  <!-- =================== ORIGINAL TABLE =================== -->
+  <div class="section-title" style="margin-top:28px">📋 To'liq menejerlar reytingi</div>
   <table>
     <thead>
       <tr>
@@ -1975,6 +2104,7 @@ function render(fromTs, toTs, label) {
 
   // Marketing Funnel render
   renderMarketingFunnel(fromTs, toTs);
+  renderGamification(fromTs, toTs, label);
 
   // Charts
   drawCharts(s);
@@ -2170,6 +2300,192 @@ function populateFunnelPipelineDropdown() {
 }
 
 // Tanlangan voronkadagi faol sotuvchilar bilan dropdown'ni to'ldiramiz
+// ============================================================
+// GAMIFICATION — Top sotuvchi reytingi
+// ============================================================
+const GAMI_POINTS = {
+  call: 1,         // har qo'ng'iroq
+  answered: 2,     // javob berilgan bonus (+2 ga qo'shimcha)
+  minute: 1,       // har 1 daqiqa gaplashish
+  rozi: 15,        // rozi bo'ldi (boraman dedi / Qabulga keldi)
+  tashrif: 30,     // tashrif qildi (Tavsiya etildi / etilmadi)
+  sotuv: 100,      // sotuv
+  // yangi_lead ball user qarori bilan olib tashlandi (faqat konversiyalar uchun ball)
+};
+
+function computeGamification(fromTs, toTs) {
+  // Bu davr ichidagi har sotuvchi uchun ball hisoblanadi
+  const stats = {};  // name → metrics + points
+
+  function ensure(name) {
+    if (!stats[name]) {
+      stats[name] = {
+        name,
+        calls: 0, answered: 0, dur_sec: 0,
+        yangi: 0, rozi: 0, tashrif: 0, sotuv: 0,
+        points: 0,
+      };
+    }
+    return stats[name];
+  }
+
+  // Qo'ng'iroqlar
+  for (const c of (RAW.calls || [])) {
+    if (c.t < fromTs || c.t >= toTs) continue;
+    const nm = uname(c.u);
+    if (nm === "Noma'lum") continue;
+    const s = ensure(nm);
+    s.calls++;
+    const dur = c.d || 0;
+    if (isAnswered(c)) {
+      s.answered++;
+      if (dur > 0) s.dur_sec += dur;
+    }
+  }
+
+  // Marketing funnel'dan leadlar (Yangi/Rozi/Tashrif/Sotuv)
+  for (const p of (RAW.funnel_pipelines || [])) {
+    const statusMap = {};
+    for (const st of (p.statuses || [])) statusMap[st.id] = st;
+    for (const l of (p.leads || [])) {
+      if (l.t < fromTs || l.t >= toTs) continue;
+      const actor = l.lu != null ? l.lu : l.u;
+      const nm = uname(actor);
+      if (nm === "Noma'lum") continue;
+      const s = ensure(nm);
+      const meta = statusMap[l.s];
+      if (!meta) continue;
+      // Stage'ga qarab sanaymiz
+      if (meta.stage === 'yangi') s.yangi++;
+      else if (meta.stage === 'rozi') s.rozi++;
+      else if (meta.stage === 'tashrif') s.tashrif++;
+      else if (meta.stage === 'sotuv') s.sotuv++;
+    }
+  }
+
+  // Ball hisoblash
+  for (const nm in stats) {
+    const s = stats[nm];
+    const minutes = s.dur_sec / 60;
+    s.points = Math.round(
+      s.calls * GAMI_POINTS.call +
+      s.answered * GAMI_POINTS.answered +
+      minutes * GAMI_POINTS.minute +
+      s.rozi * GAMI_POINTS.rozi +
+      s.tashrif * GAMI_POINTS.tashrif +
+      s.sotuv * GAMI_POINTS.sotuv
+    );
+    s.dur_min = +(minutes.toFixed(1));
+  }
+
+  // Reyting bo'yicha sortlash
+  const rows = Object.values(stats).filter(s => s.points > 0 || s.calls > 0);
+  rows.sort((a, b) => b.points - a.points);
+  rows.forEach((r, i) => r.rank = i + 1);
+  return rows;
+}
+
+// Achievement (medal) tizimi
+function computeAchievements(s) {
+  const badges = [];
+  // Bronze (asosiy)
+  if (s.calls >= 30) badges.push({ icon: '📞', label: '30+ Qo’ng’iroq', cls: 'bronze' });
+  if (s.calls >= 100) badges.push({ icon: '📞', label: '100 Qo’ng’iroq Klubi', cls: 'silver' });
+  if (s.calls >= 200) badges.push({ icon: '📞', label: '200+ Qo’ng’iroq', cls: 'gold' });
+  if (s.answered >= 20) badges.push({ icon: '✅', label: '20+ Javob', cls: 'bronze' });
+  if (s.answered >= 50) badges.push({ icon: '✅', label: 'Telefon Pro (50+)', cls: 'silver' });
+  if (s.dur_min >= 60) badges.push({ icon: '⏱', label: '1+ Soat Gaplashdi', cls: 'bronze' });
+  if (s.dur_min >= 120) badges.push({ icon: '⏱', label: '2 Soat Klubi', cls: 'silver' });
+  if (s.dur_min >= 240) badges.push({ icon: '⏱', label: 'Marafonchi (4+ soat)', cls: 'gold' });
+  if (s.yangi >= 5) badges.push({ icon: '🌟', label: '5+ Yangi Lead', cls: 'bronze' });
+  if (s.yangi >= 15) badges.push({ icon: '🌟', label: 'Lead Magnit (15+)', cls: 'silver' });
+  if (s.rozi >= 3) badges.push({ icon: '🤝', label: '3+ Rozi qildirdi', cls: 'silver' });
+  if (s.rozi >= 10) badges.push({ icon: '🤝', label: 'Convertor (10+)', cls: 'gold' });
+  if (s.tashrif >= 1) badges.push({ icon: '🎓', label: 'Tashrif tashkillagan', cls: 'silver' });
+  if (s.tashrif >= 5) badges.push({ icon: '🎓', label: 'Visitor Master (5+)', cls: 'gold' });
+  if (s.sotuv >= 1) badges.push({ icon: '💰', label: 'Sotuv Champion', cls: 'gold' });
+  if (s.sotuv >= 5) badges.push({ icon: '🔥', label: 'On Fire (5+ sotuv)', cls: 'red' });
+  // Reyting medali
+  if (s.rank === 1) badges.unshift({ icon: '👑', label: 'TOP-1', cls: 'gold' });
+  else if (s.rank === 2) badges.unshift({ icon: '🥈', label: 'TOP-2', cls: 'silver' });
+  else if (s.rank === 3) badges.unshift({ icon: '🥉', label: 'TOP-3', cls: 'bronze' });
+  return badges;
+}
+
+function renderGamification(fromTs, toTs, label) {
+  const rows = computeGamification(fromTs, toTs);
+  $('gami-period').textContent = label ? '— ' + label : '';
+
+  // Podium (top 3)
+  const podiumEl = $('gami-podium');
+  if (rows.length === 0) {
+    podiumEl.innerHTML = '<div style="color:#9ca3af;font-style:italic;padding:20px">Bu davrda hech qanday faollik yo’q</div>';
+    $('gami-leaderboard').innerHTML = '';
+    $('gami-achievements').innerHTML = '';
+    return;
+  }
+  const medals = ['🥇', '🥈', '🥉'];
+  // Podium order: 2nd, 1st, 3rd (chap, markaz, o'ng)
+  const order = [1, 0, 2];
+  podiumEl.innerHTML = order.map(idx => {
+    const m = rows[idx];
+    if (!m) return '';
+    const cls = `podium-${idx + 1}`;
+    return `
+      <div class="podium-card ${cls}">
+        <div class="podium-medal">${medals[idx]}</div>
+        <div class="podium-name">${m.name}</div>
+        <div class="podium-points">${m.points}</div>
+        <div style="font-size:11px;color:#9ca3af">ball</div>
+        <div class="podium-breakdown">
+          📞 ${m.calls} · ✅ ${m.answered} · ⏱ ${m.dur_min} daq<br>
+          🌟 ${m.yangi} · 🤝 ${m.rozi} · 🎓 ${m.tashrif} · 💰 ${m.sotuv}
+        </div>
+      </div>`;
+  }).join('');
+
+  // Leaderboard cards (all)
+  $('gami-leaderboard').innerHTML = rows.map(m => `
+    <div class="gami-card">
+      <div class="gami-card-head">
+        <div class="gami-rank">${m.rank}</div>
+        <div class="gami-name">${m.name}</div>
+        <div class="gami-pts">${m.points} ball</div>
+      </div>
+      <div class="gami-metrics">
+        <div class="gami-metric"><span>📞 Qo’ng’iroq</span><b>${m.calls}</b></div>
+        <div class="gami-metric"><span>✅ Javob</span><b>${m.answered}</b></div>
+        <div class="gami-metric"><span>⏱ Gaplashish</span><b>${m.dur_min} daq</b></div>
+        <div class="gami-metric"><span>🌟 Yangi lead</span><b>${m.yangi}</b></div>
+        <div class="gami-metric"><span>🤝 Rozi</span><b>${m.rozi}</b></div>
+        <div class="gami-metric"><span>🎓 Tashrif</span><b>${m.tashrif}</b></div>
+        <div class="gami-metric"><span>💰 Sotuv</span><b>${m.sotuv}</b></div>
+      </div>
+    </div>
+  `).join('');
+
+  // Achievements wall
+  $('gami-achievements').innerHTML = rows.map(m => {
+    const badges = computeAchievements(m);
+    const badgesHtml = badges.length
+      ? badges.map(b => `<span class="achievement-badge ${b.cls}">${b.icon} ${b.label}</span>`).join('')
+      : '<span class="achievement-empty">hali achievement yo’q</span>';
+    return `
+      <div class="achievement-row">
+        <div class="achievement-name">${m.name}</div>
+        <div class="achievement-badges">${badgesHtml}</div>
+      </div>`;
+  }).join('');
+}
+
+// Formula toggle
+document.addEventListener('click', (e) => {
+  if (e.target.closest('#gami-formula-toggle')) {
+    const det = document.getElementById('gami-formula-detail');
+    if (det) det.style.display = det.style.display === 'none' ? 'block' : 'none';
+  }
+});
+
 function populateFunnelManagerDropdown() {
   const sel = $('funnelManager');
   const prev = sel.value;
