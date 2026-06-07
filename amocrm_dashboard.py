@@ -2016,14 +2016,11 @@ function computePipelineFunnel(pipeline, fromTs, toTs, visitReason, managerFilte
     if (!matchesVisit(l.s)) continue;
     stageCounts[meta.stage] = (stageCounts[meta.stage] || 0) + 1;
   }
-  // Yangi (qualified) = leadlar [yangi, rozi, tashrif, sotuv] stage'larida
-  //   ← Bu KUMULYATIV: lead yangi'dan o'tib hozir rozi'da bo'lsa, baribir yangi
-  //      bo'lib hisoblanadi (lekin rozi'da ham). Sifatsiz / Bekor / Boshqa
-  //      (Неразобранное, Qayta aloqa) — yangi'ga kirmaydi.
-  // Rozi+   = [rozi, tashrif, sotuv]
-  // Tashrif+ = [tashrif, sotuv]
-  // Sotuv = [sotuv]
-  const yangi_total = stageCounts.yangi + stageCounts.rozi + stageCounts.tashrif + stageCounts.sotuv;
+  // Yangi = davr ichida voronkaga kirgan BARCHA leadlar (statusdan qat'i nazar)
+  // Rozi+ = leadlar [rozi, tashrif, sotuv] statuslarida
+  // Tashrif+ = leadlar [tashrif, sotuv] statuslarida
+  // Sotuv = leadlar [sotuv] statusida
+  const yangi_total = leads.filter(l => matchesVisit(l.s)).length;
   const rozi_plus = stageCounts.rozi + stageCounts.tashrif + stageCounts.sotuv;
   const tashrif_plus = stageCounts.tashrif + stageCounts.sotuv;
   const sotuv_only = stageCounts.sotuv;
