@@ -388,6 +388,7 @@ def fetch_all():
         if p["id"] not in target_pipeline_ids:
             continue
         p_statuses = []
+        unsorted_status_id = None
         for s in sorted(p.get("_embedded", {}).get("statuses", []), key=lambda x: x.get("sort", 0)):
             p_statuses.append({
                 "id": s["id"],
@@ -396,18 +397,49 @@ def fetch_all():
                 "stage": detect_funnel_stage(s.get("name", ""), s.get("type", 0)),
                 "visit": detect_visit_reason(s.get("name", "")),
             })
-        # Voronkadagi leadlarni olamiz
+            # type=1 = "Неразобранное" — unsorted leadlar shu yerda hisoblanadi
+            if s.get("type") == 1:
+                unsorted_status_id = s["id"]
+
+        # 1) Oddiy leadlar (qabul qilingan)
         p_leads = paginate(
             "/leads",
             {"filter[pipeline_id]": p["id"], "order[created_at]": "desc"},
             max_items=FUNNEL_LEADS_PER_PIPELINE,
         )
+        known_lead_ids = {l.get("id") for l in p_leads if l.get("id")}
+
+        # 2) Unsorted leadlar (Facebook/forma'lardan kelgan, hali qabul qilinmagan)
+        # amoCRM ularni /leads endpoint'idan qaytarmaydi — alohida /leads/unsorted kerak
+        synthetic_leads = []
+        try:
+            unsorted = paginate(
+                "/leads/unsorted",
+                {"filter[pipeline_id]": p["id"]},
+                max_items=2000,
+            )
+            for u in unsorted:
+                # Bog'liq lead bo'lsa va u allaqachon p_leads'da bo'lsa — o'tkazib yuboramiz
+                linked = (u.get("_embedded") or {}).get("leads") or []
+                linked_id = linked[0].get("id") if linked else None
+                if linked_id and linked_id in known_lead_ids:
+                    continue
+                # Synthetic lead: unsorted lead = Неразобранное (yangi) status
+                synthetic_leads.append({
+                    "id": linked_id or u.get("uid"),
+                    "status_id": unsorted_status_id,
+                    "responsible_user_id": u.get("responsible_user_id"),
+                    "created_by": u.get("created_by"),
+                    "updated_by": u.get("created_by"),  # unsorted hech kim tahrirlamaydi
+                    "created_at": u.get("created_at", 0),
+                })
+        except Exception as e:
+            print(f"     ⚠ /leads/unsorted xatosi (skip): {e}")
+
+        all_leads = p_leads + synthetic_leads
 
         def _last_actor(l):
-            """Sotuvchi attribution — eng aniqdan eng umumiy:
-               updated_by > responsible_user_id > created_by.
-               Eski versiyada /events ham ishlatilardi, lekin ba'zi muhitlarda
-               noaniq natija beradi. updated_by — eng to'g'ri va tezkor."""
+            """Sotuvchi attribution — updated_by > responsible_user_id > created_by."""
             return (l.get("updated_by")
                     or l.get("responsible_user_id")
                     or l.get("created_by"))
@@ -419,14 +451,15 @@ def fetch_all():
             "leads": [
                 {
                     "s": l.get("status_id"),
-                    "u": l.get("responsible_user_id"),  # mas'ul (lead egasi)
-                    "lu": _last_actor(l),               # oxirgi harakat qiluvchi (events orqali aniq)
+                    "u": l.get("responsible_user_id"),
+                    "lu": _last_actor(l),
                     "t": l.get("created_at", 0),
                 }
-                for l in p_leads
+                for l in all_leads
             ],
         })
-        print(f"     ✓ {p.get('name')!r:<30}  statuses={len(p_statuses)}  leads={len(p_leads)}")
+        unsorted_note = f" + {len(synthetic_leads)} unsorted" if synthetic_leads else ""
+        print(f"     ✓ {p.get('name')!r:<30}  statuses={len(p_statuses)}  leads={len(p_leads)}{unsorted_note}")
     print(f"     ✓ Funnel uchun {len(funnel_pipelines)} voronka tayyor")
 
     return {
