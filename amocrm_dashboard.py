@@ -58,7 +58,7 @@ FUNNEL_LEADS_PER_PIPELINE = 5000
 # Bu lug'at avval avtomatik aniqlashdan PRIORITET. Maxsus holatlar uchun.
 STATUS_STAGE_OVERRIDES = {
     # ─── Site (10705250) ───
-    84347282: "boshqa",    # Неразобранное (Facebook raw, hali saralanmagan)
+    84347282: "exclude",   # Неразобранное (Facebook raw, hali sales tegmagan — funnel'dan tashqari)
     85256062: "yangi",     # Toshkent lead ← YANGI funnel boshi
     86214338: "sifatsiz",  # boshqa viloyat (Toshkent emas → rad etiladi)
 
@@ -2179,20 +2179,26 @@ function computePipelineFunnel(pipeline, fromTs, toTs, visitReason, managerFilte
   };
 
   // Per-stage hisoblash
+  // "exclude" stage — funnel'dan butunlay chiqariladi (masalan, Site'dagi
+  // Не отсортированное Facebook leadlari — sales hali tegmagan, pre-funnel).
   const stageCounts = { yangi: 0, rozi: 0, tashrif: 0, sotuv: 0, sifatsiz: 0, bekor: 0, boshqa: 0 };
+  let totalCounted = 0;  // exclude bo'lmagan leadlar soni
   for (const l of leads) {
     const meta = statusMap[l.s];
     if (!meta) continue;
     if (!matchesVisit(l.s)) continue;
+    if (meta.stage === 'exclude') continue;  // ← pre-funnel'ni o'tkazib yuboramiz
     stageCounts[meta.stage] = (stageCounts[meta.stage] || 0) + 1;
+    totalCounted++;
   }
   // Yangi hisoblash usuli — voronka konfiguratsiyasi 'yangi_mode' ga bog'liq:
-  //   'total'     — BARCHA leadlar (default, masalan Test cloud, Imtihon+shartnoma)
+  //   'total'     — exclude bo'lmagan barcha leadlar (default)
   //   'qualified' — faqat qualified [yangi+rozi+tashrif+sotuv] (Site uchun, Facebook unsorted'ni chiqarish)
+  // ⚠ totalCounted exclude leadlarni yo'qqa chiqargan, shuning uchun jami xato chiqmaydi
   const yangiMode = pipeline.yangi_mode || 'total';
   const yangi_total = (yangiMode === 'qualified')
     ? (stageCounts.yangi + stageCounts.rozi + stageCounts.tashrif + stageCounts.sotuv)
-    : leads.filter(l => matchesVisit(l.s)).length;
+    : totalCounted;
   const rozi_plus = stageCounts.rozi + stageCounts.tashrif + stageCounts.sotuv;
   const tashrif_plus = stageCounts.tashrif + stageCounts.sotuv;
   const sotuv_only = stageCounts.sotuv;
