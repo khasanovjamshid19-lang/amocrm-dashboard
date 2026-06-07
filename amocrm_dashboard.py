@@ -124,19 +124,21 @@ MOIZVONKI_NAME_OVERRIDES = {
     # Foydalanuvchining brauzerda qilgan tahririga muvofiq.
     # Email amoCRM'dagi user'ga moslanadi va dashboard'da chiqadigan ism
     # quyidagicha bo'ladi (hamma qurilmada — telefon, kompyuter):
-    "salohiyatschool@gmail.com": "Begzod",
-    "dilshodxaydarov1987@gmail.com": "Umar",
-    "tulkinovabduvohid12@gmail.com": "Ruslan",
+    "salohiyatschool@gmail.com": "Umar",        # amoCRM: Admin → Umar
+    "dilshodxaydarov1987@gmail.com": "Abdulaziz",  # amoCRM: Abdulaziz → Abdulaziz
+    "tulkinovabduvohid12@gmail.com": "Ruslan",  # amoCRM: Sotuv manager (Ruslan) → Ruslan
 }
 
 # ===== USER ID → ISM (Server-side override, hamma qurilmada bir xil) =====
 # Bu ID'lar dashboard'da SHU ismlar bilan ko'rinadi (har kim qaytadan rename
 # qilmasdan). LocalStorage rename ham bu ustidan ishlaydi (individual override).
+# JAMOA (2026.06 holatiga):  Umar, Ruslan, Abdulaziz
 USER_NAME_OVERRIDES_BY_ID = {
-    11580030: "Umar",       # amoCRM: Admin
-    11593910: "Ruslan",     # amoCRM: Sotuv manager (Ruslan)
-    13743574: "Abdulaziz",  # amoCRM: Abdulaziz (asl)
-    # Boshqa ID'lar — kerak bo'lsa qo'shing
+    11580030: "Umar",       # amoCRM: Admin  (email: salohiyatschool@gmail.com)
+    11593910: "Ruslan",     # amoCRM: Sotuv manager (Ruslan)  (email: tulkinovabduvohid12@...)
+    13743574: "Abdulaziz",  # amoCRM: Abdulaziz  (email: dilshodxaydarov1987@...)
+    # Eski hisoblar (Begzod va h.k.) — agar tarixda lead/qo'ng'iroqlarda chiqsa
+    # ularning ID'larini ham shu yerga qo'shish mumkin.
 }
 
 # Site voronka (Toshkent leadlari)
@@ -308,10 +310,21 @@ def fetch_all():
                         old = user_map[uid]
                         if old != correct_name:
                             user_map[uid] = correct_name
-                            print(f"     ↻ ism override: '{old}' → '{correct_name}' (email={em})")
+                            print(f"     ↻ ism override (email): '{old}' → '{correct_name}' (email={em})")
                             applied += 1
                 if applied:
-                    print(f"     ✓ {applied} ism to'g'rilandi (override)")
+                    print(f"     ✓ {applied} ism to'g'rilandi (email override)")
+
+            # ----- USER_NAME_OVERRIDES_BY_ID — eng oxirgi prioritet -----
+            # MOIZVONKI_NAME_OVERRIDES dan keyin qayta qo'llanadi (final source of truth)
+            applied2 = 0
+            for uid, correct_name in USER_NAME_OVERRIDES_BY_ID.items():
+                if uid in user_map and user_map[uid] != correct_name:
+                    print(f"     ↻ ism override (id): id={uid}  '{user_map[uid]}' → '{correct_name}'")
+                    user_map[uid] = correct_name
+                    applied2 += 1
+            if applied2:
+                print(f"     ✓ {applied2} ism to'g'rilandi (ID override)")
         except Exception as e:
             print(f"     ⚠ Moi Zvonki xatosi: {e}")
             print(f"     ➜ AmoCRM call notes'larga qaytyapman (zaxira)")
