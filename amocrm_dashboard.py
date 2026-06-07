@@ -344,43 +344,12 @@ def fetch_all():
         if any(pat in nm for pat in FUNNEL_PIPELINE_NAME_PATTERNS):
             target_pipeline_ids.add(p["id"])
 
-    # === Lead status o'zgarishi event'larini yig'amiz (so'nggi 30 kun, max 5000) ===
-    # Maqsad: HAR lead uchun "oxirgi status o'zgarishini kim qildi" — bu eng to'g'ri
-    # "sotuvchi" attributi (responsible_user yoki updated_by'dan ko'ra aniqroq).
-    # OPTIMIZATSIYA: avval 90 kun + 30k item edi — Action'ni timeout qildiradi.
-    # Endi 30 kun + 5k item. Try/except — xato bo'lsa fallback ishlaydi.
-    print("📅  Status o'zgarish event'larini yuklamoqda (30 kun)...")
-    events_start = end_ts - 30 * 86400
-    last_actor_by_lead = {}
-    ev_start_t = time.time()
-    try:
-        status_events = paginate(
-            "/events",
-            {
-                "filter[type][]": ["lead_status_changed"],
-                "filter[created_at][from]": events_start,
-                "filter[created_at][to]": end_ts,
-            },
-            max_items=5000,
-        )
-        # entity_id (lead_id) → (max_created_at, created_by)
-        for ev in status_events:
-            if ev.get("type") != "lead_status_changed":
-                continue
-            eid = ev.get("entity_id")
-            if not eid:
-                continue
-            at = ev.get("created_at", 0)
-            by = ev.get("created_by")
-            if not by:
-                continue
-            prev = last_actor_by_lead.get(eid)
-            if prev is None or at > prev[0]:
-                last_actor_by_lead[eid] = (at, by)
-        print(f"     ✓ {len(status_events)} event, unikal lead: {len(last_actor_by_lead)}, vaqt: {time.time()-ev_start_t:.1f}s")
-    except Exception as e:
-        print(f"     ⚠ /events xatosi: {e}")
-        print(f"     ➜ updated_by → responsible_user_id fallback'ga o'tamiz")
+    # === Sotuvchi attributi — updated_by'ga asoslangan ===
+    # Diagnostika natijasi: amoCRM'ning 'updated_by' field'i eng ishonchli signal —
+    # lead'ni oxirgi marta KIM o'zgartirgani. /events orqali tekshirishdan ko'ra
+    # tezroq va aniqroq. Action'da timeout muammosi ham bo'lmaydi.
+    print("ℹ️   Sotuvchi attributi: updated_by → responsible_user_id → created_by zanjirida")
+    last_actor_by_lead = {}  # bo'sh — fallback'ga to'liq tayanadi
 
     funnel_pipelines = []
     for p in pipelines:
@@ -403,11 +372,13 @@ def fetch_all():
         )
 
         def _last_actor(l):
-            """Oxirgi status o'zgartirgan user_id; fallback: updated_by → responsible."""
-            ev = last_actor_by_lead.get(l.get("id"))
-            if ev and ev[1]:
-                return ev[1]
-            return l.get("updated_by") or l.get("responsible_user_id")
+            """Sotuvchi attribution — eng aniqdan eng umumiy:
+               updated_by > responsible_user_id > created_by.
+               Eski versiyada /events ham ishlatilardi, lekin ba'zi muhitlarda
+               noaniq natija beradi. updated_by — eng to'g'ri va tezkor."""
+            return (l.get("updated_by")
+                    or l.get("responsible_user_id")
+                    or l.get("created_by"))
 
         funnel_pipelines.append({
             "id": p["id"],
