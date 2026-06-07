@@ -54,31 +54,48 @@ FUNNEL_PIPELINE_NAME_PATTERNS = ["test"]
 FUNNEL_LEADS_PER_PIPELINE = 5000
 
 
-def detect_funnel_stage(status_name, status_type=0):
-    """Status nomidan funnel bosqichini aniqlash (Uzbek/Russian patterns).
+# ===== STATUS ID → STAGE override (per-pipeline maxsus qoidalar) =====
+# Bu lug'at avval avtomatik aniqlashdan PRIORITET. Maxsus holatlar uchun.
+# Misol: Site voronkasida "Toshkent lead" = Yangi (Неразобранное emas, chunki
+# Facebook'dan kelgan saralanmagan ma'lumot Yangi sanalmaydi).
+STATUS_STAGE_OVERRIDES = {
+    # ─── Site (10705250) ───
+    84347282: "boshqa",    # Неразобранное (Facebook raw, hali saralanmagan)
+    85256062: "yangi",     # Toshkent lead ← YANGI funnel boshi
+    86214338: "sifatsiz",  # boshqa viloyat (Toshkent emas → rad etiladi)
+    # Boshqa Site statuslari avtomatik aniqlanadi: Sotuv, Keldi darsga, Uchrashuv, OEK qabuli
+
+    # ─── Maktab shartnomasi, Imtihon+shartnoma, Site yangi ───
+    # Bularda Неразобранное = Yangi bo'lib qoladi (auto type=1)
+}
+
+
+def detect_funnel_stage(status_name, status_type=0, status_id=None):
+    """Status'dan funnel bosqichini aniqlash.
+    Priority: STATUS_STAGE_OVERRIDES → type=1 → name patterns.
     Qaytaradi: 'yangi' | 'sifatsiz' | 'bekor' | 'rozi' | 'tashrif' | 'sotuv' | 'boshqa'
     """
+    # 1) Maxsus override (eng yuqori prioritet)
+    if status_id is not None and status_id in STATUS_STAGE_OVERRIDES:
+        return STATUS_STAGE_OVERRIDES[status_id]
+
     name = (status_name or "").strip().lower()
-    # amoCRM type=1 har doim Неразобранное
+    # 2) amoCRM type=1 har doim Неразобранное (default: Yangi)
     if status_type == 1:
         return "yangi"
-    # Yopilgan rejected statuslar
+    # 3) Nom bo'yicha aniqlash
     if "sifatsiz" in name and "test" not in name:
         return "sifatsiz"
     if "bekor" in name or "закрыто и не" in name:
         return "bekor"
-    # Sotuv (yopilgan muvaffaqiyatli)
     if name == "sotuv" or "успешно" in name or "test.sotuv" in name:
         return "sotuv"
-    # Tashrif qildi (came/visited)
     if "keldi" in name or "был " in name or "был на" in name:
         return "tashrif"
-    # Rozi bo'ldi (convinced)
     rozi_keywords = ["boraman", "kelaman", "uchrashuv belgilandi", "qabuli",
                      "ochiq eshik", "согласился"]
     if any(k in name for k in rozi_keywords):
         return "rozi"
-    # Aniqlanmadi (Qayta aloqa, O'ylab ko'radi, Tavsiya etildi va h.k.)
     return "boshqa"
 
 
@@ -394,7 +411,7 @@ def fetch_all():
                 "id": s["id"],
                 "name": s.get("name", ""),
                 "sort": s.get("sort", 0),
-                "stage": detect_funnel_stage(s.get("name", ""), s.get("type", 0)),
+                "stage": detect_funnel_stage(s.get("name", ""), s.get("type", 0), s["id"]),
                 "visit": detect_visit_reason(s.get("name", "")),
             })
             # type=1 = "Неразобранное" — unsorted leadlar shu yerda hisoblanadi
@@ -1999,11 +2016,14 @@ function computePipelineFunnel(pipeline, fromTs, toTs, visitReason, managerFilte
     if (!matchesVisit(l.s)) continue;
     stageCounts[meta.stage] = (stageCounts[meta.stage] || 0) + 1;
   }
-  // Yangi = total (BARCHA leadlar voronkaga kirgan)
-  // Rozi+ = leadlar [rozi, tashrif, sotuv] statuslarida
-  // Tashrif+ = leadlar [tashrif, sotuv] statuslarida
-  // Sotuv = leadlar [sotuv] statusida
-  const yangi_total = leads.filter(l => matchesVisit(l.s)).length;
+  // Yangi (qualified) = leadlar [yangi, rozi, tashrif, sotuv] stage'larida
+  //   ← Bu KUMULYATIV: lead yangi'dan o'tib hozir rozi'da bo'lsa, baribir yangi
+  //      bo'lib hisoblanadi (lekin rozi'da ham). Sifatsiz / Bekor / Boshqa
+  //      (Неразобранное, Qayta aloqa) — yangi'ga kirmaydi.
+  // Rozi+   = [rozi, tashrif, sotuv]
+  // Tashrif+ = [tashrif, sotuv]
+  // Sotuv = [sotuv]
+  const yangi_total = stageCounts.yangi + stageCounts.rozi + stageCounts.tashrif + stageCounts.sotuv;
   const rozi_plus = stageCounts.rozi + stageCounts.tashrif + stageCounts.sotuv;
   const tashrif_plus = stageCounts.tashrif + stageCounts.sotuv;
   const sotuv_only = stageCounts.sotuv;
