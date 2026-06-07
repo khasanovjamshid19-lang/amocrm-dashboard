@@ -56,17 +56,20 @@ FUNNEL_LEADS_PER_PIPELINE = 5000
 
 # ===== STATUS ID → STAGE override (per-pipeline maxsus qoidalar) =====
 # Bu lug'at avval avtomatik aniqlashdan PRIORITET. Maxsus holatlar uchun.
-# Misol: Site voronkasida "Toshkent lead" = Yangi (Неразобранное emas, chunki
-# Facebook'dan kelgan saralanmagan ma'lumot Yangi sanalmaydi).
 STATUS_STAGE_OVERRIDES = {
     # ─── Site (10705250) ───
     84347282: "boshqa",    # Неразобранное (Facebook raw, hali saralanmagan)
     85256062: "yangi",     # Toshkent lead ← YANGI funnel boshi
     86214338: "sifatsiz",  # boshqa viloyat (Toshkent emas → rad etiladi)
-    # Boshqa Site statuslari avtomatik aniqlanadi: Sotuv, Keldi darsga, Uchrashuv, OEK qabuli
+}
 
-    # ─── Maktab shartnomasi, Imtihon+shartnoma, Site yangi ───
-    # Bularda Неразобранное = Yangi bo'lib qoladi (auto type=1)
+# ===== Per-pipeline "Yangi" qanday hisoblanadi =====
+# "total"     — davr ichidagi BARCHA leadlar (statusdan qat'i nazar) — default
+# "qualified" — faqat qualified leadlar (yangi + rozi + tashrif + sotuv stagelarida)
+#               Site uchun: Facebook unsorted'lar hisobga olinmaydi, faqat Toshkent lead+downstream
+FUNNEL_YANGI_MODE = {
+    10705250: "qualified",  # Site: Toshkent lead bilan saralanadi
+    # Boshqa voronkalar: default "total"
 }
 
 
@@ -464,6 +467,7 @@ def fetch_all():
         funnel_pipelines.append({
             "id": p["id"],
             "name": p.get("name", ""),
+            "yangi_mode": FUNNEL_YANGI_MODE.get(p["id"], "total"),  # default: total
             "statuses": p_statuses,
             "leads": [
                 {
@@ -2016,11 +2020,13 @@ function computePipelineFunnel(pipeline, fromTs, toTs, visitReason, managerFilte
     if (!matchesVisit(l.s)) continue;
     stageCounts[meta.stage] = (stageCounts[meta.stage] || 0) + 1;
   }
-  // Yangi = davr ichida voronkaga kirgan BARCHA leadlar (statusdan qat'i nazar)
-  // Rozi+ = leadlar [rozi, tashrif, sotuv] statuslarida
-  // Tashrif+ = leadlar [tashrif, sotuv] statuslarida
-  // Sotuv = leadlar [sotuv] statusida
-  const yangi_total = leads.filter(l => matchesVisit(l.s)).length;
+  // Yangi hisoblash usuli — voronka konfiguratsiyasi 'yangi_mode' ga bog'liq:
+  //   'total'     — BARCHA leadlar (default, masalan Test cloud, Imtihon+shartnoma)
+  //   'qualified' — faqat qualified [yangi+rozi+tashrif+sotuv] (Site uchun, Facebook unsorted'ni chiqarish)
+  const yangiMode = pipeline.yangi_mode || 'total';
+  const yangi_total = (yangiMode === 'qualified')
+    ? (stageCounts.yangi + stageCounts.rozi + stageCounts.tashrif + stageCounts.sotuv)
+    : leads.filter(l => matchesVisit(l.s)).length;
   const rozi_plus = stageCounts.rozi + stageCounts.tashrif + stageCounts.sotuv;
   const tashrif_plus = stageCounts.tashrif + stageCounts.sotuv;
   const sotuv_only = stageCounts.sotuv;
